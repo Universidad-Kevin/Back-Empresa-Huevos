@@ -25,7 +25,7 @@ export const reactivarProducto = async (req, res) => {
     console.log("Reactivando producto ID:", id);
 
     const [result] = await pool.execute(
-      'UPDATE productos SET estado = "activo", actualizado_en = CURRENT_TIMESTAMP WHERE id = ?',
+      'UPDATE productos SET estado = "activo", creado_en = CURRENT_TIMESTAMP WHERE id = ?',
       [id]
     );
 
@@ -167,7 +167,7 @@ export const createProducto = async (req, res) => {
   }
 };
 
-// ✅ NUEVO: Actualizar producto
+// ✅ CORREGIDO: Actualizar producto
 export const updateProducto = async (req, res) => {
   try {
     const { id } = req.params;
@@ -200,7 +200,7 @@ export const updateProducto = async (req, res) => {
 
       const [result] = await pool.execute(
         `UPDATE productos 
-         SET estado = ?, creado_en = CURRENT_TIMESTAMP
+         SET estado = ?, actualizado_en = CURRENT_TIMESTAMP
          WHERE id = ?`,
         [estado, id]
       );
@@ -222,7 +222,7 @@ export const updateProducto = async (req, res) => {
       const [result] = await pool.execute(
         `UPDATE productos 
          SET nombre = ?, descripcion = ?, precio = ?, categoria = ?, 
-             imagen = ?, stock = ?, estado = ?, caracteristicas = ?, creado_en = CURRENT_TIMESTAMP
+             imagen = ?, stock = ?, estado = ?, caracteristicas = ?, actualizado_en = CURRENT_TIMESTAMP
          WHERE id = ?`,
         [
           nombre,
