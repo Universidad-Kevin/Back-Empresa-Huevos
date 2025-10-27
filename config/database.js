@@ -14,8 +14,9 @@ if (!process.env.DATABASE_URL) {
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
   ssl: {
-    rejectUnauthorized: false, // necesario para Render
+    rejectUnauthorized: false,
   },
+  options: "-c search_path=public",
 });
 
 // 🧪 Probar conexión inicial
