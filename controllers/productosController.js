@@ -3,13 +3,13 @@ import pool from "../config/database.js";
 // Obtener todos los productos activos
 export const getProductos = async (req, res) => {
   try {
-    const [productos] = await pool.execute(
-      'SELECT * FROM productos WHERE estado = "activo" ORDER BY creado_en DESC'
+    const result = await pool.query(
+      "SELECT * FROM productos WHERE estado = 'activo' ORDER BY creado_en DESC"
     );
 
     res.json({
       success: true,
-      data: productos,
+      data: result.rows,
     });
   } catch (error) {
     console.error("Error obteniendo productos:", error);
@@ -17,54 +17,43 @@ export const getProductos = async (req, res) => {
   }
 };
 
-// Reactivar producto (solo cambia estado a activo)
+// Reactivar producto
 export const reactivarProducto = async (req, res) => {
   try {
     const { id } = req.params;
 
     console.log("Reactivando producto ID:", id);
 
-    const [result] = await pool.execute(
-      'UPDATE productos SET estado = "activo", creado_en = CURRENT_TIMESTAMP WHERE id = ?',
+    const result = await pool.query(
+      "UPDATE productos SET estado = 'activo', creado_en = CURRENT_TIMESTAMP WHERE id = $1 RETURNING *",
       [id]
     );
 
-    console.log("Producto reactivado. Filas afectadas:", result.affectedRows);
-
-    if (result.affectedRows === 0) {
+    if (result.rowCount === 0) {
       return res.status(404).json({ error: "Producto no encontrado" });
     }
 
-    // Obtener el producto reactivado
-    const [productos] = await pool.execute(
-      "SELECT * FROM productos WHERE id = ?",
-      [id]
-    );
-
     res.json({
       success: true,
-      data: productos[0],
+      data: result.rows[0],
       message: "Producto reactivado exitosamente",
     });
   } catch (error) {
     console.error("Error reactivando producto:", error);
-    res.status(500).json({
-      error: "Error del servidor al reactivar producto",
-      details: error.message,
-    });
+    res.status(500).json({ error: "Error del servidor" });
   }
 };
 
 // Obtener todos los productos (activos e inactivos)
 export const getAllProductos = async (req, res) => {
   try {
-    const [productos] = await pool.execute(
+    const result = await pool.query(
       "SELECT * FROM productos ORDER BY creado_en DESC"
     );
 
     res.json({
       success: true,
-      data: productos,
+      data: result.rows,
     });
   } catch (error) {
     console.error("Error obteniendo todos los productos:", error);
@@ -72,16 +61,16 @@ export const getAllProductos = async (req, res) => {
   }
 };
 
-// Obtener solo productos inactivos
+// Obtener productos inactivos
 export const getProductosInactivos = async (req, res) => {
   try {
-    const [productos] = await pool.execute(
-      'SELECT * FROM productos WHERE estado = "inactivo" ORDER BY creado_en DESC'
+    const result = await pool.query(
+      "SELECT * FROM productos WHERE estado = 'inactivo' ORDER BY creado_en DESC"
     );
 
     res.json({
       success: true,
-      data: productos,
+      data: result.rows,
     });
   } catch (error) {
     console.error("Error obteniendo productos inactivos:", error);
@@ -94,18 +83,18 @@ export const getProductoById = async (req, res) => {
   try {
     const { id } = req.params;
 
-    const [productos] = await pool.execute(
-      'SELECT * FROM productos WHERE id = ? AND estado = "activo"',
+    const result = await pool.query(
+      "SELECT * FROM productos WHERE id = $1 AND estado = 'activo'",
       [id]
     );
 
-    if (productos.length === 0) {
+    if (result.rowCount === 0) {
       return res.status(404).json({ error: "Producto no encontrado" });
     }
 
     res.json({
       success: true,
-      data: productos[0],
+      data: result.rows[0],
     });
   } catch (error) {
     console.error("Error obteniendo producto:", error);
@@ -113,7 +102,7 @@ export const getProductoById = async (req, res) => {
   }
 };
 
-// ✅ NUEVO: Crear producto
+// Crear producto
 export const createProducto = async (req, res) => {
   try {
     const {
@@ -128,15 +117,16 @@ export const createProducto = async (req, res) => {
 
     console.log("Datos recibidos para crear producto:", req.body);
 
-    // Validaciones básicas
     if (!nombre || !precio || !categoria) {
       return res.status(400).json({
         error: "Nombre, precio y categoría son requeridos",
       });
     }
 
-    const [result] = await pool.execute(
-      "INSERT INTO productos (nombre, descripcion, precio, categoria, imagen, stock, caracteristicas) VALUES (?, ?, ?, ?, ?, ?, ?)",
+    const result = await pool.query(
+      `INSERT INTO productos (nombre, descripcion, precio, categoria, imagen, stock, caracteristicas)
+       VALUES ($1, $2, $3, $4, $5, $6, $7)
+       RETURNING *`,
       [
         nombre,
         descripcion,
@@ -148,17 +138,9 @@ export const createProducto = async (req, res) => {
       ]
     );
 
-    // Obtener el producto recién creado
-    const [productos] = await pool.execute(
-      "SELECT * FROM productos WHERE id = ?",
-      [result.insertId]
-    );
-
-    console.log("Producto creado con ID:", result.insertId);
-
     res.status(201).json({
       success: true,
-      data: productos[0],
+      data: result.rows[0],
       message: "Producto creado exitosamente",
     });
   } catch (error) {
@@ -167,7 +149,7 @@ export const createProducto = async (req, res) => {
   }
 };
 
-// ✅ CORREGIDO: Actualizar producto
+// Actualizar producto
 export const updateProducto = async (req, res) => {
   try {
     const { id } = req.params;
@@ -184,80 +166,61 @@ export const updateProducto = async (req, res) => {
 
     console.log("Actualizando producto ID:", id, "con datos:", req.body);
 
-    // Si solo estamos cambiando el estado, obtener los datos actuales primero
+    // Si solo se cambia el estado
     if (Object.keys(req.body).length === 1 && req.body.estado) {
-      // Solo estamos cambiando el estado, obtener datos actuales
-      const [productosActuales] = await pool.execute(
-        "SELECT * FROM productos WHERE id = ?",
-        [id]
-      );
-
-      if (productosActuales.length === 0) {
-        return res.status(404).json({ error: "Producto no encontrado" });
-      }
-
-      const productoActual = productosActuales[0];
-
-      const [result] = await pool.execute(
+      const result = await pool.query(
         `UPDATE productos 
-         SET estado = ?, actualizado_en = CURRENT_TIMESTAMP
-         WHERE id = ?`,
+         SET estado = $1, actualizado_en = CURRENT_TIMESTAMP 
+         WHERE id = $2 
+         RETURNING *`,
         [estado, id]
       );
 
-      console.log(
-        "Solo estado actualizado. Filas afectadas:",
-        result.affectedRows
-      );
-    } else {
-      // Actualización completa del producto
-      // Validaciones para actualización completa
-      if (!nombre || !precio || !categoria) {
-        return res.status(400).json({
-          error:
-            "Nombre, precio y categoría son requeridos para actualización completa",
-        });
+      if (result.rowCount === 0) {
+        return res.status(404).json({ error: "Producto no encontrado" });
       }
 
-      const [result] = await pool.execute(
-        `UPDATE productos 
-         SET nombre = ?, descripcion = ?, precio = ?, categoria = ?, 
-             imagen = ?, stock = ?, estado = ?, caracteristicas = ?, actualizado_en = CURRENT_TIMESTAMP
-         WHERE id = ?`,
-        [
-          nombre,
-          descripcion,
-          precio,
-          categoria,
-          imagen,
-          stock,
-          estado,
-          JSON.stringify(caracteristicas || []),
-          id,
-        ]
-      );
-
-      console.log(
-        "Producto completamente actualizado. Filas afectadas:",
-        result.affectedRows
-      );
+      return res.json({
+        success: true,
+        data: result.rows[0],
+        message: "Estado actualizado exitosamente",
+      });
     }
 
-    // Obtener el producto actualizado
-    const [productos] = await pool.execute(
-      "SELECT * FROM productos WHERE id = ?",
-      [id]
+    // Actualización completa
+    if (!nombre || !precio || !categoria) {
+      return res.status(400).json({
+        error:
+          "Nombre, precio y categoría son requeridos para actualización completa",
+      });
+    }
+
+    const result = await pool.query(
+      `UPDATE productos 
+       SET nombre = $1, descripcion = $2, precio = $3, categoria = $4, 
+           imagen = $5, stock = $6, estado = $7, caracteristicas = $8, actualizado_en = CURRENT_TIMESTAMP
+       WHERE id = $9 
+       RETURNING *`,
+      [
+        nombre,
+        descripcion,
+        precio,
+        categoria,
+        imagen,
+        stock,
+        estado,
+        JSON.stringify(caracteristicas || []),
+        id,
+      ]
     );
 
-    if (productos.length === 0) {
-      return res
-        .status(404)
-        .json({ error: "Producto no encontrado después de actualizar" });
+    if (result.rowCount === 0) {
+      return res.status(404).json({ error: "Producto no encontrado" });
     }
 
     res.json({
       success: true,
-      data: productos[0],
+      data: result.rows[0],
       message: "Producto actualizado exitosamente",
     });
   } catch (error) {
@@ -269,21 +232,19 @@ export const updateProducto = async (req, res) => {
   }
 };
 
-// ✅ NUEVO: Eliminar producto
+// Eliminar producto (inactivar)
 export const deleteProducto = async (req, res) => {
   try {
     const { id } = req.params;
 
     console.log("Eliminando producto ID:", id);
 
-    const [result] = await pool.execute(
-      'UPDATE productos SET estado = "inactivo" WHERE id = ?',
+    const result = await pool.query(
+      "UPDATE productos SET estado = 'inactivo', actualizado_en = CURRENT_TIMESTAMP WHERE id = $1",
       [id]
     );
 
-    console.log("Filas afectadas:", result.affectedRows);
-
-    if (result.affectedRows === 0) {
+    if (result.rowCount === 0) {
       return res.status(404).json({ error: "Producto no encontrado" });
     }
 

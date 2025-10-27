@@ -1,3 +1,4 @@
+// server.js
 import express from "express";
 import cors from "cors";
 import dotenv from "dotenv";
@@ -5,19 +6,19 @@ import { testConnection } from "./config/database.js";
 
 // Importar rutas
 import authRoutes from "./routes/auth.js";
-import clientesRoutes from './routes/clientes.js';
+import clientesRoutes from "./routes/clientes.js";
 import productosRoutes from "./routes/productos.js";
 
-// Configurar environment
+// Cargar variables de entorno
 dotenv.config();
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// Middleware
+// CORS: Permitir orígenes específicos
 app.use(
   cors({
-    origin: "http://localhost:5173",
+    origin: ["http://localhost:5173", "https://huevos-organicos.vercel.app"],
     credentials: true,
     methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
     allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With"],
@@ -27,32 +28,33 @@ app.use(
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// Middleware de logging
+// Logging de cada request (útil para desarrollo)
 app.use((req, res, next) => {
   console.log(`${new Date().toISOString()} - ${req.method} ${req.path}`);
   next();
 });
 
-// Ruta raíz
+// Ruta raíz (info general)
 app.get("/", (req, res) => {
   res.json({
     success: true,
-    message: "API de Huevos Orgánicos - Backend funcionando",
+    message: "API de Huevos Orgánicos - Backend funcionando ✅",
     version: "1.0.0",
     endpoints: {
       auth: "/api/auth",
       productos: "/api/productos",
+      clientes: "/api/clientes",
       health: "/api/health",
+      info: "/api/info",
+      stats: "/api/stats",
     },
   });
 });
 
-// Rutas API
 app.use("/api/auth", authRoutes);
+app.use("/api/clientes", clientesRoutes);
 app.use("/api/productos", productosRoutes);
-app.use('/api/clientes', clientesRoutes);
 
-// Ruta de salud
 app.get("/api/health", (req, res) => {
   res.json({
     success: true,
@@ -62,7 +64,6 @@ app.get("/api/health", (req, res) => {
   });
 });
 
-// Ruta de información
 app.get("/api/info", (req, res) => {
   res.json({
     success: true,
@@ -70,29 +71,21 @@ app.get("/api/info", (req, res) => {
       nombre: "API Huevos Orgánicos",
       version: "1.0.0",
       descripcion: "Backend para sistema de gestión de huevos orgánicos",
-      autor: "Tu Nombre",
+      autor: "Kevin Tenorio",
     },
   });
 });
 
-// Ruta para obtener estadísticas básicas
 app.get("/api/stats", async (req, res) => {
   try {
-    const pool = await import("./config/database.js").then(
-      (mod) => mod.default
-    );
+    const pool = await import("./config/database.js").then((mod) => mod.default);
 
-    // Obtener conteo de productos
-    const [productosResult] = await pool.execute(
-      'SELECT COUNT(*) as total FROM productos WHERE estado = "activo"'
+    const [[{ total: totalProductos }]] = await pool.execute(
+      'SELECT COUNT(*) AS total FROM productos WHERE estado = "activo"'
     );
-    const totalProductos = productosResult[0].total;
-
-    // Obtener conteo de usuarios
-    const [usuariosResult] = await pool.execute(
-      "SELECT COUNT(*) as total FROM usuarios WHERE activo = TRUE"
+    const [[{ total: totalUsuarios }]] = await pool.execute(
+      "SELECT COUNT(*) AS total FROM usuarios WHERE activo = TRUE"
     );
-    const totalUsuarios = usuariosResult[0].total;
 
     res.json({
       success: true,
@@ -111,7 +104,7 @@ app.get("/api/stats", async (req, res) => {
   }
 });
 
-// Manejo de rutas no encontradas - CORREGIDO
+// Ruta no encontrada
 app.use((req, res) => {
   res.status(404).json({
     success: false,
@@ -121,7 +114,7 @@ app.use((req, res) => {
   });
 });
 
-// Manejo de errores global
+// Error global
 app.use((error, req, res, next) => {
   console.error("Error global:", error);
   res.status(500).json({
@@ -130,27 +123,23 @@ app.use((error, req, res, next) => {
   });
 });
 
-// Inicializar servidor
 const startServer = async () => {
   try {
-    // Probar conexión a la base de datos
     const dbConnected = await testConnection();
     if (!dbConnected) {
       console.error("❌ No se pudo conectar a la base de datos. Saliendo...");
       process.exit(1);
     }
 
-    // Iniciar servidor
     app.listen(PORT, () => {
-      console.log(`🚀 Servidor corriendo en http://localhost:${PORT}`);
-      console.log(`📊 Environment: ${process.env.NODE_ENV}`);
+      console.log(`🚀 Servidor corriendo en: http://localhost:${PORT}`);
+      console.log(`📦 Entorno: ${process.env.NODE_ENV}`);
       console.log(`🗄️ Base de datos: ${process.env.DB_NAME}`);
-      console.log("\n📋 Endpoints disponibles:");
-      console.log("   GET  /              - Información de la API");
-      console.log("   GET  /api/health    - Estado del servidor");
-      console.log("   GET  /api/info      - Información del API");
-      console.log("   GET  /api/stats     - Estadísticas básicas");
-      console.log("   GET  /api/productos - Lista de productos");
+      console.log("\n📋 Endpoints principales:");
+      console.log("   GET  /api/health     - Estado del servidor");
+      console.log("   GET  /api/info       - Información del API");
+      console.log("   GET  /api/stats      - Estadísticas básicas");
+      console.log("   GET  /api/productos  - Lista de productos");
       console.log("   POST /api/auth/login - Login de usuarios");
     });
   } catch (error) {
