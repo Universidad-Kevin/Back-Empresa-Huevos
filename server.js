@@ -4,58 +4,68 @@ import cors from "cors";
 import dotenv from "dotenv";
 import { testConnection } from "./config/database.js";
 
-// Importar rutas
+// Rutas
 import authRoutes from "./routes/auth.js";
 import clientesRoutes from "./routes/clientes.js";
 import productosRoutes from "./routes/productos.js";
 
-// Cargar variables de entorno
 dotenv.config();
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// CORS: Permitir orígenes específicos
-app.use(
-  cors({
-    origin: ["http://localhost:5173", "https://huevos-organicos.vercel.app"],
-    credentials: true,
-    methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
-    allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With"],
-  })
-);
+// ⚡ Middleware CORS - Desarrollo local
+if (process.env.NODE_ENV !== "production") {
+  app.use(cors({ origin: "*", credentials: true }));
+} else {
+  const allowedOrigins = [process.env.FRONTEND_URL];
+  app.use(
+    cors({
+      origin: (origin, callback) => {
+        if (!origin || allowedOrigins.includes(origin)) {
+          callback(null, true);
+        } else {
+          console.warn(`⚠️  Bloqueado por CORS: ${origin}`);
+          callback(new Error("CORS bloqueado: origen no permitido"));
+        }
+      },
+      credentials: true,
+    })
+  );
+}
 
+// Middleware para parsear JSON y URL-encoded
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// Logging de cada request (útil para desarrollo)
+// Middleware de logging simple
 app.use((req, res, next) => {
   console.log(`${new Date().toISOString()} - ${req.method} ${req.path}`);
   next();
 });
 
-// Ruta raíz (info general)
+// Rutas públicas
 app.get("/", (req, res) => {
   res.json({
     success: true,
-    message: "API de Huevos Orgánicos - Backend funcionando ✅",
+    message: "API de Huevos Orgánicos - Backend funcionando 🥚",
     version: "1.0.0",
     endpoints: {
-      auth: "/api/auth",
-      productos: "/api/productos",
-      clientes: "/api/clientes",
-      health: "/api/health",
-      info: "/api/info",
-      stats: "/api/stats",
+      auth: "/auth",
+      productos: "/productos",
+      clientes: "/clientes",
+      health: "/health",
     },
   });
 });
 
-app.use("/api/auth", authRoutes);
-app.use("/api/clientes", clientesRoutes);
-app.use("/api/productos", productosRoutes);
+// Rutas API
+app.use("/auth", authRoutes);
+app.use("/productos", productosRoutes);
+app.use("/clientes", clientesRoutes);
 
-app.get("/api/health", (req, res) => {
+// Endpoint de health check
+app.get("/health", (req, res) => {
   res.json({
     success: true,
     message: "Servidor funcionando correctamente",
@@ -64,47 +74,49 @@ app.get("/api/health", (req, res) => {
   });
 });
 
-app.get("/api/info", (req, res) => {
+// Info de la API
+app.get("/info", (req, res) => {
   res.json({
     success: true,
     data: {
       nombre: "API Huevos Orgánicos",
       version: "1.0.0",
-      descripcion: "Backend para sistema de gestión de huevos orgánicos",
+      descripcion: "Backend para el sistema de gestión de huevos orgánicos",
       autor: "Kevin Tenorio",
     },
   });
 });
 
-app.get("/api/stats", async (req, res) => {
+// Estadísticas simples
+app.get("/stats", async (req, res) => {
   try {
-    const pool = await import("./config/database.js").then((mod) => mod.default);
+    const pool = await import("./config/database.js").then(
+      (mod) => mod.default
+    );
 
-    const [[{ total: totalProductos }]] = await pool.execute(
-      'SELECT COUNT(*) AS total FROM productos WHERE estado = "activo"'
+    const [productosResult] = await pool.execute(
+      'SELECT COUNT(*) as total FROM productos WHERE estado = "activo"'
     );
-    const [[{ total: totalUsuarios }]] = await pool.execute(
-      "SELECT COUNT(*) AS total FROM usuarios WHERE activo = TRUE"
+    const totalProductos = productosResult[0].total;
+
+    const [usuariosResult] = await pool.execute(
+      "SELECT COUNT(*) as total FROM usuarios WHERE activo = TRUE"
     );
+    const totalUsuarios = usuariosResult[0].total;
 
     res.json({
       success: true,
-      data: {
-        totalProductos,
-        totalUsuarios,
-        servidor: "Online",
-      },
+      data: { totalProductos, totalUsuarios, servidor: "Online" },
     });
   } catch (error) {
-    console.error("Error obteniendo estadísticas:", error);
-    res.status(500).json({
-      success: false,
-      message: "Error obteniendo estadísticas",
-    });
+    console.error("❌ Error obteniendo estadísticas:", error);
+    res
+      .status(500)
+      .json({ success: false, message: "Error obteniendo estadísticas" });
   }
 });
 
-// Ruta no encontrada
+// Middleware 404 para rutas no encontradas
 app.use((req, res) => {
   res.status(404).json({
     success: false,
@@ -114,33 +126,36 @@ app.use((req, res) => {
   });
 });
 
-// Error global
+// Middleware global de errores
 app.use((error, req, res, next) => {
-  console.error("Error global:", error);
+  console.error("🔥 Error global:", error);
   res.status(500).json({
     success: false,
     message: "Error interno del servidor",
   });
 });
 
+// Iniciar servidor solo si DB está lista
 const startServer = async () => {
   try {
     const dbConnected = await testConnection();
+
     if (!dbConnected) {
       console.error("❌ No se pudo conectar a la base de datos. Saliendo...");
       process.exit(1);
     }
 
-    app.listen(PORT, () => {
-      console.log(`🚀 Servidor corriendo en: http://localhost:${PORT}`);
-      console.log(`📦 Entorno: ${process.env.NODE_ENV}`);
+    app.listen(PORT, "0.0.0.0", () => {
+      console.log(`🚀 Servidor corriendo en http://localhost:${PORT}`);
+      console.log(`📊 Environment: ${process.env.NODE_ENV}`);
       console.log(`🗄️ Base de datos: ${process.env.DB_NAME}`);
-      console.log("\n📋 Endpoints principales:");
-      console.log("   GET  /api/health     - Estado del servidor");
-      console.log("   GET  /api/info       - Información del API");
-      console.log("   GET  /api/stats      - Estadísticas básicas");
-      console.log("   GET  /api/productos  - Lista de productos");
-      console.log("   POST /api/auth/login - Login de usuarios");
+      console.log("\n📋 Endpoints disponibles:");
+      console.log(" GET / - Información general");
+      console.log(" GET /health - Estado del servidor");
+      console.log(" GET /info - Información del API");
+      console.log(" GET /stats - Estadísticas");
+      console.log(" GET /productos - Lista de productos");
+      console.log(" POST /auth/login - Login de usuarios");
     });
   } catch (error) {
     console.error("❌ Error iniciando servidor:", error);

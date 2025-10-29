@@ -1,51 +1,33 @@
-import pkg from "pg";
+import mysql from "mysql2/promise";
 import dotenv from "dotenv";
 dotenv.config();
+// Configuración de la conexión a MySQL
+const dbConfig = {
+  host: process.env.DB_HOST,
+  user: process.env.DB_USER,
+  password: process.env.DB_PASSWORD,
+  database: process.env.DB_NAME,
+  waitForConnections: true,
+  connectionLimit: 10,
+  queueLimit: 0,
+};
 
-const { Pool } = pkg;
-
-// 🔍 Validar variable de entorno
-if (!process.env.DATABASE_URL) {
-  console.error("❌ Error: Falta la variable de entorno DATABASE_URL");
-  process.exit(1);
-}
-
-// ⚙️ Configuración del pool de PostgreSQL
-const pool = new Pool({
-  connectionString: process.env.DATABASE_URL,
-  ssl: {
-    rejectUnauthorized: false,
-  },
-  options: "-c search_path=public",
-});
-
-// 🧪 Probar conexión inicial
+// Crear pool de conexiones
+const pool = mysql.createPool(dbConfig);
+// Probar conexión
 export const testConnection = async () => {
   try {
-    const client = await pool.connect();
-    console.log("✅ Conexión a PostgreSQL establecida correctamente");
-
-    // Verificar tablas
-    const result = await client.query(`
-      SELECT table_name 
-      FROM information_schema.tables 
-      WHERE table_schema = 'public';
-    `);
-
-    console.log(
-      `📊 Tablas detectadas en la base de datos: ${result.rows.length}`
-    );
-    client.release();
+    const connection = await pool.getConnection();
+    console.log("✅ Conexión a MySQL establecida correctamente");
+    // Verificar que las tablas existen
+    const [tables] = await connection.execute("SHOW TABLES");
+    console.log(`📊 Tablas en la base de datos: ${tables.length}`);
+    connection.release();
     return true;
   } catch (error) {
-    console.error("❌ Error conectando a PostgreSQL:", error.message);
+    console.error("❌ Error conectando a MySQL:", error.message);
     return false;
   }
 };
-
-// 🔁 Reintento automático ante error de conexión
-pool.on("error", (err) => {
-  console.error("⚠️ Error inesperado en el pool de PostgreSQL:", err.message);
-});
 
 export default pool;

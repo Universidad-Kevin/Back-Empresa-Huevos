@@ -5,21 +5,23 @@ import pool from "../config/database.js";
 export const login = async (req, res) => {
   try {
     const { email, password } = req.body;
+    console.log("Intento de login para:", req.body);
 
-    // Buscar usuario (en PostgreSQL usamos $1, $2, etc.)
-    const result = await pool.query(
-      "SELECT * FROM usuarios WHERE email = $1 AND activo = TRUE",
+    // Buscar usuario
+    const [users] = await pool.query(
+      "SELECT * FROM usuarios WHERE email = ? AND activo = TRUE",
       [email]
     );
-
-    if (result.rows.length === 0) {
+    console.log("Usuarios encontrados:", users);
+    if (users.length === 0) {
       return res.status(401).json({ error: "Credenciales incorrectas" });
     }
 
-    const user = result.rows[0];
+    const user = users[0];
 
     // Verificar contraseña
     const validPassword = await bcrypt.compare(password, user.password);
+    console.log("Validación de contraseña:", validPassword, user.password, password);
     if (!validPassword) {
       return res.status(401).json({ error: "Credenciales incorrectas" });
     }

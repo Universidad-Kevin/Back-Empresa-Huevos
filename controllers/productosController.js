@@ -3,14 +3,11 @@ import pool from "../config/database.js";
 // Obtener todos los productos activos
 export const getProductos = async (req, res) => {
   try {
-    const result = await pool.query(
+    const [rows] = await pool.query(
       "SELECT * FROM productos WHERE estado = 'activo' ORDER BY creado_en DESC"
     );
 
-    res.json({
-      success: true,
-      data: result.rows,
-    });
+    res.json({ success: true, data: rows });
   } catch (error) {
     console.error("Error obteniendo productos:", error);
     res.status(500).json({ error: "Error del servidor" });
@@ -21,21 +18,24 @@ export const getProductos = async (req, res) => {
 export const reactivarProducto = async (req, res) => {
   try {
     const { id } = req.params;
-
     console.log("Reactivando producto ID:", id);
 
-    const result = await pool.query(
-      "UPDATE productos SET estado = 'activo', creado_en = CURRENT_TIMESTAMP WHERE id = $1 RETURNING *",
+    const [result] = await pool.query(
+      "UPDATE productos SET estado = 'activo', actualizado_en = CURRENT_TIMESTAMP WHERE id = ?",
       [id]
     );
 
-    if (result.rowCount === 0) {
+    if (result.affectedRows === 0) {
       return res.status(404).json({ error: "Producto no encontrado" });
     }
 
+    const [rows] = await pool.query("SELECT * FROM productos WHERE id = ?", [
+      id,
+    ]);
+
     res.json({
       success: true,
-      data: result.rows[0],
+      data: rows[0],
       message: "Producto reactivado exitosamente",
     });
   } catch (error) {
@@ -47,14 +47,10 @@ export const reactivarProducto = async (req, res) => {
 // Obtener todos los productos (activos e inactivos)
 export const getAllProductos = async (req, res) => {
   try {
-    const result = await pool.query(
+    const [rows] = await pool.query(
       "SELECT * FROM productos ORDER BY creado_en DESC"
     );
-
-    res.json({
-      success: true,
-      data: result.rows,
-    });
+    res.json({ success: true, data: rows });
   } catch (error) {
     console.error("Error obteniendo todos los productos:", error);
     res.status(500).json({ error: "Error del servidor" });
@@ -64,14 +60,10 @@ export const getAllProductos = async (req, res) => {
 // Obtener productos inactivos
 export const getProductosInactivos = async (req, res) => {
   try {
-    const result = await pool.query(
+    const [rows] = await pool.query(
       "SELECT * FROM productos WHERE estado = 'inactivo' ORDER BY creado_en DESC"
     );
-
-    res.json({
-      success: true,
-      data: result.rows,
-    });
+    res.json({ success: true, data: rows });
   } catch (error) {
     console.error("Error obteniendo productos inactivos:", error);
     res.status(500).json({ error: "Error del servidor" });
@@ -82,20 +74,16 @@ export const getProductosInactivos = async (req, res) => {
 export const getProductoById = async (req, res) => {
   try {
     const { id } = req.params;
-
-    const result = await pool.query(
-      "SELECT * FROM productos WHERE id = $1 AND estado = 'activo'",
+    const [rows] = await pool.query(
+      "SELECT * FROM productos WHERE id = ? AND estado = 'activo'",
       [id]
     );
 
-    if (result.rowCount === 0) {
+    if (rows.length === 0) {
       return res.status(404).json({ error: "Producto no encontrado" });
     }
 
-    res.json({
-      success: true,
-      data: result.rows[0],
-    });
+    res.json({ success: true, data: rows[0] });
   } catch (error) {
     console.error("Error obteniendo producto:", error);
     res.status(500).json({ error: "Error del servidor" });
@@ -114,22 +102,21 @@ export const createProducto = async (req, res) => {
       stock,
       caracteristicas,
     } = req.body;
-
     console.log("Datos recibidos para crear producto:", req.body);
 
     if (!nombre || !precio || !categoria) {
-      return res.status(400).json({
-        error: "Nombre, precio y categoría son requeridos",
-      });
+      return res
+        .status(400)
+        .json({ error: "Nombre, precio y categoría son requeridos" });
     }
 
-    const result = await pool.query(
-      `INSERT INTO productos (nombre, descripcion, precio, categoria, imagen, stock, caracteristicas)
-       VALUES ($1, $2, $3, $4, $5, $6, $7)
-       RETURNING *`,
+    const [result] = await pool.query(
+      `INSERT INTO productos 
+       (nombre, descripcion, precio, categoria, imagen, stock, caracteristicas, estado, creado_en)
+       VALUES (?, ?, ?, ?, ?, ?, ?, 'activo', NOW())`,
       [
         nombre,
-        descripcion,
+        descripcion || null,
         precio,
         categoria,
         imagen || null,
@@ -138,9 +125,14 @@ export const createProducto = async (req, res) => {
       ]
     );
 
+    const [nuevoProducto] = await pool.query(
+      "SELECT * FROM productos WHERE id = ?",
+      [result.insertId]
+    );
+
     res.status(201).json({
       success: true,
-      data: result.rows[0],
+      data: nuevoProducto[0],
       message: "Producto creado exitosamente",
     });
   } catch (error) {
@@ -168,26 +160,27 @@ export const updateProducto = async (req, res) => {
 
     // Si solo se cambia el estado
     if (Object.keys(req.body).length === 1 && req.body.estado) {
-      const result = await pool.query(
+      const [result] = await pool.query(
         `UPDATE productos 
-         SET estado = $1, actualizado_en = CURRENT_TIMESTAMP 
-         WHERE id = $2 
-         RETURNING *`,
+         SET estado = ?, actualizado_en = CURRENT_TIMESTAMP 
+         WHERE id = ?`,
         [estado, id]
       );
 
-      if (result.rowCount === 0) {
+      if (result.affectedRows === 0) {
         return res.status(404).json({ error: "Producto no encontrado" });
       }
 
+      const [rows] = await pool.query("SELECT * FROM productos WHERE id = ?", [
+        id,
+      ]);
       return res.json({
         success: true,
-        data: result.rows[0],
+        data: rows[0],
         message: "Estado actualizado exitosamente",
       });
     }
 
-    // Actualización completa
     if (!nombre || !precio || !categoria) {
       return res.status(400).json({
         error:
@@ -195,12 +188,11 @@ export const updateProducto = async (req, res) => {
       });
     }
 
-    const result = await pool.query(
+    const [result] = await pool.query(
       `UPDATE productos 
-       SET nombre = $1, descripcion = $2, precio = $3, categoria = $4, 
-           imagen = $5, stock = $6, estado = $7, caracteristicas = $8, actualizado_en = CURRENT_TIMESTAMP
-       WHERE id = $9 
-       RETURNING *`,
+       SET nombre = ?, descripcion = ?, precio = ?, categoria = ?, 
+           imagen = ?, stock = ?, estado = ?, caracteristicas = ?, actualizado_en = CURRENT_TIMESTAMP
+       WHERE id = ?`,
       [
         nombre,
         descripcion,
@@ -214,13 +206,18 @@ export const updateProducto = async (req, res) => {
       ]
     );
 
-    if (result.rowCount === 0) {
+    if (result.affectedRows === 0) {
       return res.status(404).json({ error: "Producto no encontrado" });
     }
 
+    const [productoActualizado] = await pool.query(
+      "SELECT * FROM productos WHERE id = ?",
+      [id]
+    );
+
     res.json({
       success: true,
-      data: result.rows[0],
+      data: productoActualizado[0],
       message: "Producto actualizado exitosamente",
     });
   } catch (error) {
@@ -236,22 +233,18 @@ export const updateProducto = async (req, res) => {
 export const deleteProducto = async (req, res) => {
   try {
     const { id } = req.params;
-
     console.log("Eliminando producto ID:", id);
 
-    const result = await pool.query(
-      "UPDATE productos SET estado = 'inactivo', actualizado_en = CURRENT_TIMESTAMP WHERE id = $1",
+    const [result] = await pool.query(
+      "UPDATE productos SET estado = 'inactivo', actualizado_en = CURRENT_TIMESTAMP WHERE id = ?",
       [id]
     );
 
-    if (result.rowCount === 0) {
+    if (result.affectedRows === 0) {
       return res.status(404).json({ error: "Producto no encontrado" });
     }
 
-    res.json({
-      success: true,
-      message: "Producto eliminado exitosamente",
-    });
+    res.json({ success: true, message: "Producto eliminado exitosamente" });
   } catch (error) {
     console.error("Error eliminando producto:", error);
     res.status(500).json({ error: "Error del servidor" });
