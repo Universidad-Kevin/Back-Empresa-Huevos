@@ -1,0 +1,62 @@
+version: '3.8'
+
+services:
+  backend:
+    build: .
+    ports:
+      - "${BACKEND_PORT}:3000"
+    environment:
+      - DB_HOST=db
+      - DB_USER=huevos_user
+      - DB_PASSWORD=huevos_password
+      - DB_NAME=huevos_organicos
+      - JWT_SECRET=${JWT_SECRET}
+    volumes:
+      - .:/app
+      - /app/node_modules
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - backend_network
+
+  db:
+    image: mysql:8.0
+    container_name: mysql_huevos
+    environment:
+      MYSQL_ROOT_PASSWORD: mysecretpassword
+      MYSQL_DATABASE: huevos_organicos
+      MYSQL_USER: huevos_user
+      MYSQL_PASSWORD: huevos_password
+    ports:
+      - "3307:3306"
+    healthcheck:
+      test: ["CMD", "mysqladmin" ,"ping", "-h", "localhost"]
+      timeout: 5s
+      retries: 10
+    volumes:
+      - db_data:/var/lib/mysql
+    networks:
+      - backend_network
+
+  phpmyadmin:
+    image: phpmyadmin/phpmyadmin
+    container_name: phpmyadmin_huevos
+    ports:
+      - "8080:80"
+    environment:
+      PMA_HOST: db
+      PMA_USER: ${DB_USER}
+      PMA_PASSWORD: ${DB_PASSWORD}
+    depends_on:
+      - db
+    networks:
+      - backend_network
+
+volumes:
+  db_data:
+
+networks:
+  backend_network:
+    driver: bridge
