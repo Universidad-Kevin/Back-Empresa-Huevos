@@ -100,6 +100,7 @@ export const createProducto = async (req, res) => {
       categoria,
       imagen,
       stock,
+      estado,
       caracteristicas,
     } = req.body;
     console.log("Datos recibidos para crear producto:", req.body);
@@ -112,8 +113,8 @@ export const createProducto = async (req, res) => {
 
     const [result] = await pool.query(
       `INSERT INTO productos 
-       (nombre, descripcion, precio, categoria, imagen, stock, caracteristicas, estado, creado_en)
-       VALUES (?, ?, ?, ?, ?, ?, ?, 'activo', NOW())`,
+       (nombre, descripcion, precio, categoria, imagen, stock, estado, caracteristicas, creado_en)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, NOW())`,
       [
         nombre,
         descripcion || null,
@@ -121,6 +122,7 @@ export const createProducto = async (req, res) => {
         categoria,
         imagen || null,
         stock || 0,
+        estado,
         JSON.stringify(caracteristicas || []),
       ]
     );

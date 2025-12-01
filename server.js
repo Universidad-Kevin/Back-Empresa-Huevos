@@ -8,6 +8,7 @@ import { testConnection } from "./config/database.js";
 import authRoutes from "./routes/auth.js";
 import clientesRoutes from "./routes/clientes.js";
 import productosRoutes from "./routes/productos.js";
+import interesadosRoutes from "./routes/interesados.js";
 
 dotenv.config();
 
@@ -60,9 +61,11 @@ app.get("/", (req, res) => {
 });
 
 // Rutas API
+console.log("🔌 Mounting auth routes...");
 app.use("/auth", authRoutes);
 app.use("/productos", productosRoutes);
 app.use("/clientes", clientesRoutes);
+app.use("/interesados", interesadosRoutes);
 
 // Endpoint de health check
 app.get("/health", (req, res) => {

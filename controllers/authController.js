@@ -21,7 +21,12 @@ export const login = async (req, res) => {
 
     // Verificar contraseña
     const validPassword = await bcrypt.compare(password, user.password);
-    console.log("Validación de contraseña:", validPassword, user.password, password);
+    console.log(
+      "Validación de contraseña:",
+      validPassword,
+      user.password,
+      password
+    );
     if (!validPassword) {
       return res.status(401).json({ error: "Credenciales incorrectas" });
     }
@@ -48,6 +53,49 @@ export const login = async (req, res) => {
     });
   } catch (error) {
     console.error("❌ Error en login:", error);
+    res.status(500).json({ error: "Error del servidor" });
+  }
+};
+
+//Creacion de usuario
+export const register = async (req, res) => {
+  try {
+    const { nombre, email, password } = req.body;
+    console.log("Intento de registro:", req.body);
+
+    // Verificar si el email ya existe
+    const [users] = await pool.query(
+      "SELECT id FROM usuarios WHERE email = ?",
+      [email]
+    );
+
+    if (users.length > 0) {
+      return res.status(409).json({ error: "Email ya registrado" });
+    }
+
+    // Encriptar contraseña
+    const salt = await bcrypt.genSalt(10);
+    const hashedPassword = await bcrypt.hash(password, salt);
+
+    // Insertar usuario
+    const [result] = await pool.query(
+      "INSERT INTO usuarios (nombre, email, password, rol, activo) VALUES (?, ?, ?, ?, TRUE)",
+      [nombre, email, hashedPassword, "empleado"]
+    );
+
+    // Respuesta
+    res.json({
+      success: true,
+      message: "Usuario registrado correctamente",
+      data: {
+        id: result.insertId,
+        nombre,
+        email,
+        rol: "empleado",
+      },
+    });
+  } catch (error) {
+    console.error("❌ Error en registro:", error);
     res.status(500).json({ error: "Error del servidor" });
   }
 };

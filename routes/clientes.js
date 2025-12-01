@@ -1,22 +1,26 @@
 import express from "express";
 import {
-  getClientes,
+  getClientesActivos,
+  getClientesInactivos,
+  getClientesPendientes,
   getClienteById,
   createCliente,
   updateCliente,
   deleteCliente,
   reactivarCliente,
-  getClientesStats
+  getAllClientes,
 } from "../controllers/clientesController.js";
 import { authenticateToken } from "../middleware/auth.js";
 
 const router = express.Router();
 
 // ✅ Rutas públicas (si necesitas)
-router.get("/stats", getClientesStats);
+router.get("/all", getAllClientes);
+router.get("/activos", getClientesActivos);
+router.get("/inactivos", getClientesInactivos);
+router.get("/pendientes", getClientesPendientes);
 
 // ✅ Rutas protegidas
-router.get("/", authenticateToken, getClientes);
 router.get("/:id", authenticateToken, getClienteById);
 router.post("/", authenticateToken, createCliente);
 router.put("/:id", authenticateToken, updateCliente);

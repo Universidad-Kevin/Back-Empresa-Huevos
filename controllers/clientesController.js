@@ -1,16 +1,17 @@
 import pool from "../config/database.js";
 
-export const getClientes = async (req, res) => {
-  try {
-    const [rows] = await pool.query(
-      "SELECT * FROM clientes ORDER BY creado_en DESC"
-    );
-    res.json({ success: true, data: rows });
-  } catch (error) {
-    console.error("Error obteniendo clientes:", error);
-    res.status(500).json({ error: "Error del servidor" });
-  }
-};
+// // Obtener todos los clientes
+// export const getClientes = async (req, res) => {
+//   try {
+//     const [rows] = await pool.query(
+//       "SELECT * FROM clientes ORDER BY creado_en DESC"
+//     );
+//     res.json({ success: true, data: rows });
+//   } catch (error) {
+//     console.error("Error obteniendo clientes:", error);
+//     res.status(500).json({ error: "Error del servidor" });
+//   }
+// };
 
 export const getClienteById = async (req, res) => {
   try {
@@ -188,25 +189,78 @@ export const reactivarCliente = async (req, res) => {
   }
 };
 
-export const getClientesStats = async (req, res) => {
+// Obtener todos los clientes
+export const getAllClientes= async (req, res) => {
   try {
-    const [result] = await pool.query(`
-      SELECT 
-        COUNT(*) AS totalClientes,
-        COUNT(CASE WHEN estado = 'activo' THEN 1 END) AS clientesActivos,
-        COUNT(CASE WHEN estado = 'inactivo' THEN 1 END) AS clientesInactivos
-      FROM clientes
-    `);
-
-    res.json({
-      success: true,
-      data: result[0],
-    });
+    const [rows] = await pool.query(
+      "SELECT * FROM clientes ORDER BY creado_en DESC"
+    );
+    res.json({ success: true, data: rows });
   } catch (error) {
-    console.error("Error obteniendo estadísticas de clientes:", error);
-    res.status(500).json({
-      success: false,
-      message: "Error obteniendo estadísticas de clientes",
-    });
+    console.error("Error obteniendo todos los clientes:", error);
+    res.status(500).json({ error: "Error del servidor" });
   }
 };
+
+// Obtener todos los productos activos
+export const getClientesActivos = async (req, res) => {
+  try {
+    const [rows] = await pool.query(
+      "SELECT * FROM clientes WHERE estado = 'activo' ORDER BY creado_en DESC"
+    );
+
+    res.json({ success: true, data: rows });
+  } catch (error) {
+    console.error("Error obteniendo clientes activos:", error);
+    res.status(500).json({ error: "Error del servidor" });
+  }
+};
+
+// Obtener clientes inactivos
+export const getClientesInactivos = async (req, res) => {
+  try {
+    const [rows] = await pool.query(
+      "SELECT * FROM clientes WHERE estado = 'inactivo' ORDER BY creado_en DESC"
+    );
+    res.json({ success: true, data: rows });
+  } catch (error) {
+    console.error("Error obteniendo clientes inactivos:", error);
+    res.status(500).json({ error: "Error del servidor" });
+  }
+};
+
+// Obtener clientes pendientes
+export const getClientesPendientes = async (req, res) => {
+  try {
+    const [rows] = await pool.query(
+      "SELECT * FROM clientes WHERE estado = 'pendiente' ORDER BY creado_en DESC"
+    );
+    res.json({ success: true, data: rows });
+  } catch (error) {
+    console.error("Error obteniendo clientes pendientes:", error);
+    res.status(500).json({ error: "Error del servidor" });
+  }
+};
+
+// export const getClientesStats = async (req, res) => {
+//   try {
+//     const [result] = await pool.query(`
+//  SELECT 
+//         COUNT(*) AS totalClientes,
+//         COUNT(CASE WHEN estado = 'activo' THEN 1 END) AS clientesActivos,
+//         COUNT(CASE WHEN estado = 'inactivo' THEN 1 END) AS clientesInactivos
+//       FROM clientes
+//     `);
+
+//     res.json({
+//       success: true,
+//       data: result[0],
+//     });
+//   } catch (error) {
+//     console.error("Error obteniendo estadísticas de clientes:", error);
+//     res.status(500).json({
+//       success: false,
+//       message: "Error obteniendo estadísticas de clientes",
+//     });
+//   }
+// };

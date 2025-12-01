@@ -14,7 +14,7 @@ import { reactivarProducto } from "../controllers/productosController.js";
 const router = express.Router();
 
 // ✅ Rutas públicas
-router.get("/", getProductos);
+router.get("/activos", getProductos);
 router.get("/all", getAllProductos);
 router.get("/inactivos", getProductosInactivos);
 router.get("/:id", getProductoById);
