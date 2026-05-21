@@ -15,6 +15,18 @@ export const getMiPerfil = async (req, res) => {
   }
 };
 
+export const getAllUsuarios = async (req, res) => {
+  try {
+    const [rows] = await pool.execute(
+      "SELECT id, nombre, email, rol, creado_en FROM usuarios WHERE rol = 'cliente' ORDER BY creado_en DESC"
+    );
+    res.json({ success: true, data: rows });
+  } catch (error) {
+    console.error("Error obteniendo usuarios:", error);
+    res.status(500).json({ error: "Error del servidor" });
+  }
+};
+
 export const updateMiPerfil = async (req, res) => {
   try {
     const { nombre, email, password_actual, password_nuevo } = req.body;
