@@ -5,6 +5,7 @@ import {
   getPedidoById,
   getAllPedidos,
   updateEstadoPedido,
+  getPedidosPendientesCount,
 } from "../controllers/pedidosController.js";
 import { authenticateToken } from "../middleware/auth.js";
 
@@ -15,8 +16,9 @@ router.post("/", authenticateToken, createPedido);
 router.get("/mis-pedidos", authenticateToken, getMisPedidos);
 router.get("/:id", authenticateToken, getPedidoById);
 
-// Admin: ver todos y cambiar estado
+// Admin: ver todos, cambiar estado y conteo de pendientes
 router.get("/", authenticateToken, getAllPedidos);
+router.get("/pendientes/count", authenticateToken, getPedidosPendientesCount);
 router.put("/:id/estado", authenticateToken, updateEstadoPedido);
 
 export default router;

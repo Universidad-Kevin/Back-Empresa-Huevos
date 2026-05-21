@@ -123,6 +123,77 @@ export const enviarConfirmacionPedido = (nombre, email, pedido) => {
   );
 };
 
+export const enviarNotificacionAdmin = (pedido) => {
+  const adminEmail = process.env.ADMIN_EMAIL || process.env.EMAIL_USER;
+  if (!adminEmail) return;
+
+  const metodoPagoLabel = {
+    efectivo: "💵 Pago contra entrega",
+    transferencia: "🏦 Transferencia bancaria",
+    tarjeta: "💳 Tarjeta de crédito/débito",
+  };
+
+  const itemsHTML = (pedido.items || [])
+    .map(
+      (i) => `
+      <tr>
+        <td style="padding:8px;border-bottom:1px solid #eee;">${i.nombre_producto}</td>
+        <td style="padding:8px;border-bottom:1px solid #eee;text-align:center;">${i.cantidad}</td>
+        <td style="padding:8px;border-bottom:1px solid #eee;text-align:right;">$${parseFloat(i.precio_unitario).toFixed(2)}</td>
+        <td style="padding:8px;border-bottom:1px solid #eee;text-align:right;">$${(i.cantidad * i.precio_unitario).toFixed(2)}</td>
+      </tr>`
+    )
+    .join("");
+
+  return enviar(
+    adminEmail,
+    `🛒 Nuevo pedido #${pedido.id} de ${pedido.cliente_nombre}`,
+    `
+    <div style="font-family:sans-serif;max-width:600px;margin:auto;">
+      <div style="background:#1a3a6b;padding:24px;text-align:center;">
+        <h1 style="color:#fff;margin:0;">CampOrganic — Admin</h1>
+      </div>
+      <div style="padding:32px;background:#f9f9f9;">
+        <h2 style="color:#1a3a6b;">Nuevo pedido recibido</h2>
+        <p>El cliente <strong>${pedido.cliente_nombre}</strong> (${pedido.cliente_email}) acaba de realizar un pedido.</p>
+
+        <div style="background:#fff;border:1px solid #ddd;border-radius:8px;padding:16px;margin:16px 0;">
+          <p style="margin:4px 0;"><strong>Pedido #:</strong> ${pedido.id}</p>
+          <p style="margin:4px 0;"><strong>Total:</strong> $${parseFloat(pedido.total).toFixed(2)}</p>
+          <p style="margin:4px 0;"><strong>Método de pago:</strong> ${metodoPagoLabel[pedido.metodo_pago] || pedido.metodo_pago}</p>
+          <p style="margin:4px 0;"><strong>Estado:</strong> Pendiente</p>
+        </div>
+
+        <table style="width:100%;border-collapse:collapse;margin:16px 0;">
+          <thead>
+            <tr style="background:#1a3a6b;color:#fff;">
+              <th style="padding:10px;text-align:left;">Producto</th>
+              <th style="padding:10px;text-align:center;">Cant.</th>
+              <th style="padding:10px;text-align:right;">Precio</th>
+              <th style="padding:10px;text-align:right;">Subtotal</th>
+            </tr>
+          </thead>
+          <tbody>${itemsHTML}</tbody>
+          <tfoot>
+            <tr>
+              <td colspan="3" style="padding:12px;text-align:right;font-weight:bold;">Total:</td>
+              <td style="padding:12px;text-align:right;font-weight:bold;color:#1a3a6b;">$${parseFloat(pedido.total).toFixed(2)}</td>
+            </tr>
+          </tfoot>
+        </table>
+
+        <div style="text-align:center;margin:32px 0;">
+          <a href="${process.env.FRONTEND_URL || 'http://localhost:5173'}/admin/pedidos"
+             style="background:#1a3a6b;color:#fff;padding:14px 28px;border-radius:8px;text-decoration:none;font-weight:bold;">
+            Gestionar Pedidos
+          </a>
+        </div>
+      </div>
+    </div>
+    `
+  );
+};
+
 export const enviarCambioEstado = (nombre, email, pedido) => {
   const mensajes = {
     procesando: { titulo: "Tu pedido está en proceso", desc: "Estamos preparando tu pedido con cuidado." },

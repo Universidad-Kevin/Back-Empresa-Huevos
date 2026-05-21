@@ -1,5 +1,5 @@
 import pool from "../config/database.js";
-import { enviarConfirmacionPedido, enviarCambioEstado } from "../services/emailService.js";
+import { enviarConfirmacionPedido, enviarCambioEstado, enviarNotificacionAdmin } from "../services/emailService.js";
 
 const crearTablas = async () => {
   await pool.execute(`
@@ -96,8 +96,9 @@ export const createPedido = async (req, res) => {
 
     const pedidoCompleto = { ...pedido[0], items: detalle };
 
-    // Email de confirmación (no bloqueante)
+    // Emails no bloqueantes
     enviarConfirmacionPedido(pedido[0].cliente_nombre, pedido[0].cliente_email, pedidoCompleto);
+    enviarNotificacionAdmin(pedidoCompleto);
 
     res.status(201).json({
       success: true,
@@ -184,6 +185,17 @@ export const getAllPedidos = async (req, res) => {
     res.json({ success: true, data: pedidos });
   } catch (error) {
     console.error("Error obteniendo todos los pedidos:", error);
+    res.status(500).json({ error: "Error del servidor" });
+  }
+};
+
+export const getPedidosPendientesCount = async (req, res) => {
+  try {
+    const [rows] = await pool.execute(
+      "SELECT COUNT(*) as total FROM pedidos WHERE estado = 'pendiente'"
+    );
+    res.json({ success: true, data: { total: rows[0].total } });
+  } catch (error) {
     res.status(500).json({ error: "Error del servidor" });
   }
 };
