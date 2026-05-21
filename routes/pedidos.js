@@ -6,6 +6,7 @@ import {
   getAllPedidos,
   updateEstadoPedido,
   getPedidosPendientesCount,
+  verificarPedidoPorCodigo,
 } from "../controllers/pedidosController.js";
 import { authenticateToken } from "../middleware/auth.js";
 
@@ -16,9 +17,10 @@ router.post("/", authenticateToken, createPedido);
 router.get("/mis-pedidos", authenticateToken, getMisPedidos);
 router.get("/:id", authenticateToken, getPedidoById);
 
-// Admin: ver todos, cambiar estado y conteo de pendientes
+// Admin: ver todos, cambiar estado, verificar por código y conteo
 router.get("/", authenticateToken, getAllPedidos);
 router.get("/pendientes/count", authenticateToken, getPedidosPendientesCount);
+router.get("/verificar/:codigo", authenticateToken, verificarPedidoPorCodigo);
 router.put("/:id/estado", authenticateToken, updateEstadoPedido);
 
 export default router;

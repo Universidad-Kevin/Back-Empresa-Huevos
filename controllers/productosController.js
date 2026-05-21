@@ -75,7 +75,7 @@ export const getProductoById = async (req, res) => {
   try {
     const { id } = req.params;
     const [rows] = await pool.query(
-      "SELECT * FROM productos WHERE id = ? AND estado = 'activo'",
+      "SELECT * FROM productos WHERE id = ?",
       [id]
     );
 
@@ -121,8 +121,8 @@ export const createProducto = async (req, res) => {
         precio,
         categoria,
         imagen || null,
-        stock || 0,
-        estado,
+        stock !== undefined ? stock : 0,
+        estado || 'activo',
         JSON.stringify(caracteristicas || []),
       ]
     );
@@ -190,6 +190,21 @@ export const updateProducto = async (req, res) => {
       });
     }
 
+    const [existing] = await pool.query("SELECT * FROM productos WHERE id = ?", [id]);
+    if (existing.length === 0) {
+      return res.status(404).json({ error: "Producto no encontrado" });
+    }
+    const currentProduct = existing[0];
+
+    const updateEstado = estado !== undefined ? estado : currentProduct.estado;
+    const updateStock = stock !== undefined ? stock : currentProduct.stock;
+    const updateImagen = imagen !== undefined ? imagen : currentProduct.imagen;
+    const updateDescripcion = descripcion !== undefined ? descripcion : currentProduct.descripcion;
+    let updateCaracteristicas = currentProduct.caracteristicas;
+    if (caracteristicas !== undefined) {
+      updateCaracteristicas = typeof caracteristicas === 'string' ? caracteristicas : JSON.stringify(caracteristicas);
+    }
+
     const [result] = await pool.query(
       `UPDATE productos 
        SET nombre = ?, descripcion = ?, precio = ?, categoria = ?, 
@@ -197,20 +212,16 @@ export const updateProducto = async (req, res) => {
        WHERE id = ?`,
       [
         nombre,
-        descripcion,
+        updateDescripcion,
         precio,
         categoria,
-        imagen,
-        stock,
-        estado,
-        JSON.stringify(caracteristicas || []),
+        updateImagen,
+        updateStock,
+        updateEstado,
+        updateCaracteristicas,
         id,
       ]
     );
-
-    if (result.affectedRows === 0) {
-      return res.status(404).json({ error: "Producto no encontrado" });
-    }
 
     const [productoActualizado] = await pool.query(
       "SELECT * FROM productos WHERE id = ?",
@@ -238,7 +249,7 @@ export const deleteProducto = async (req, res) => {
     console.log("Eliminando producto ID:", id);
 
     const [result] = await pool.query(
-      "UPDATE productos SET estado = 'inactivo', actualizado_en = CURRENT_TIMESTAMP WHERE id = ?",
+      "DELETE FROM productos WHERE id = ?",
       [id]
     );
 

@@ -1,5 +1,14 @@
+import crypto from "crypto";
 import pool from "../config/database.js";
 import { enviarConfirmacionPedido, enviarCambioEstado, enviarNotificacionAdmin } from "../services/emailService.js";
+
+const generarCodigo = () => {
+  const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"; // sin 0,O,I,1 para evitar confusión
+  const bytes = crypto.randomBytes(8);
+  let code = "";
+  for (let i = 0; i < 8; i++) code += chars[bytes[i] % chars.length];
+  return code.slice(0, 4) + "-" + code.slice(4);
+};
 
 const crearTablas = async () => {
   await pool.execute(`
@@ -63,11 +72,22 @@ export const createPedido = async (req, res) => {
 
     const total = items.reduce((sum, i) => sum + i.precio_unitario * i.cantidad, 0);
 
+    // Generar código único (reintenta si colisiona)
+    let codigo;
+    for (let intentos = 0; intentos < 5; intentos++) {
+      const candidato = generarCodigo();
+      const [existe] = await conn.execute(
+        "SELECT id FROM pedidos WHERE codigo_verificacion = ?", [candidato]
+      );
+      if (existe.length === 0) { codigo = candidato; break; }
+    }
+    if (!codigo) throw new Error("No se pudo generar código único");
+
     await conn.beginTransaction();
 
     const [pedidoResult] = await conn.execute(
-      "INSERT INTO pedidos (usuario_id, total, nota, metodo_pago) VALUES (?, ?, ?, ?)",
-      [usuarioId, total.toFixed(2), nota || null, metodo_pago]
+      "INSERT INTO pedidos (usuario_id, total, nota, metodo_pago, codigo_verificacion) VALUES (?, ?, ?, ?, ?)",
+      [usuarioId, total.toFixed(2), nota || null, metodo_pago, codigo]
     );
     const pedidoId = pedidoResult.insertId;
 
@@ -185,6 +205,33 @@ export const getAllPedidos = async (req, res) => {
     res.json({ success: true, data: pedidos });
   } catch (error) {
     console.error("Error obteniendo todos los pedidos:", error);
+    res.status(500).json({ error: "Error del servidor" });
+  }
+};
+
+export const verificarPedidoPorCodigo = async (req, res) => {
+  try {
+    const { codigo } = req.params;
+    const [pedidos] = await pool.execute(
+      `SELECT p.*, u.nombre as cliente_nombre, u.email as cliente_email
+       FROM pedidos p JOIN usuarios u ON p.usuario_id = u.id
+       WHERE p.codigo_verificacion = ?`,
+      [codigo.toUpperCase()]
+    );
+
+    if (pedidos.length === 0) {
+      return res.status(404).json({ error: "Código no válido o pedido no encontrado" });
+    }
+
+    const pedido = pedidos[0];
+    const [detalle] = await pool.execute(
+      "SELECT * FROM detalle_pedidos WHERE pedido_id = ?",
+      [pedido.id]
+    );
+
+    res.json({ success: true, data: { ...pedido, items: detalle } });
+  } catch (error) {
+    console.error("Error verificando pedido:", error);
     res.status(500).json({ error: "Error del servidor" });
   }
 };
