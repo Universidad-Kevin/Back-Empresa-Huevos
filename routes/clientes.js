@@ -14,11 +14,11 @@ import { authenticateToken } from "../middleware/auth.js";
 
 const router = express.Router();
 
-// ✅ Rutas públicas (si necesitas)
-router.get("/all", getAllClientes);
-router.get("/activos", getClientesActivos);
-router.get("/inactivos", getClientesInactivos);
-router.get("/pendientes", getClientesPendientes);
+// Rutas protegidas de listado
+router.get("/all", authenticateToken, getAllClientes);
+router.get("/activos", authenticateToken, getClientesActivos);
+router.get("/inactivos", authenticateToken, getClientesInactivos);
+router.get("/pendientes", authenticateToken, getClientesPendientes);
 
 // ✅ Rutas protegidas
 router.get("/:id", authenticateToken, getClienteById);

@@ -1,6 +1,7 @@
 import jwt from "jsonwebtoken";
 import bcrypt from "bcryptjs";
 import pool from "../config/database.js";
+import { enviarBienvenida } from "../services/emailService.js";
 
 export const login = async (req, res) => {
   try {
@@ -82,6 +83,9 @@ export const register = async (req, res) => {
       "INSERT INTO usuarios (nombre, email, password, rol, activo) VALUES (?, ?, ?, ?, TRUE)",
       [nombre, email, hashedPassword, "empleado"]
     );
+
+    // Enviar email de bienvenida (no bloqueante)
+    enviarBienvenida(nombre, email);
 
     // Respuesta
     res.json({

@@ -9,6 +9,9 @@ import authRoutes from "./routes/auth.js";
 import clientesRoutes from "./routes/clientes.js";
 import productosRoutes from "./routes/productos.js";
 import interesadosRoutes from "./routes/interesados.js";
+import pedidosRoutes from "./routes/pedidos.js";
+import usuariosRoutes from "./routes/usuarios.js";
+import carritoRoutes from "./routes/carrito.js";
 
 dotenv.config();
 
@@ -66,6 +69,9 @@ app.use("/auth", authRoutes);
 app.use("/productos", productosRoutes);
 app.use("/clientes", clientesRoutes);
 app.use("/interesados", interesadosRoutes);
+app.use("/pedidos", pedidosRoutes);
+app.use("/usuarios", usuariosRoutes);
+app.use("/carrito", carritoRoutes);
 
 // Endpoint de health check
 app.get("/health", (req, res) => {
