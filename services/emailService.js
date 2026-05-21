@@ -194,6 +194,65 @@ export const enviarNotificacionAdmin = (pedido) => {
   );
 };
 
+export const enviarMensajeContacto = (datos) => {
+  const adminEmail = process.env.ADMIN_EMAIL || process.env.EMAIL_USER;
+  if (!adminEmail) return;
+
+  const { nombre, email, telefono, asunto, mensaje } = datos;
+
+  return enviar(
+    adminEmail,
+    `📩 Nuevo mensaje de contacto: ${asunto}`,
+    `
+    <div style="font-family:sans-serif;max-width:600px;margin:auto;">
+      <div style="background:#2D5A27;padding:24px;text-align:center;">
+        <h1 style="color:#fff;margin:0;">CampOrganic</h1>
+        <p style="color:#c8e6c9;margin:4px 0 0;">Formulario de Contacto</p>
+      </div>
+      <div style="padding:32px;background:#f9f9f9;">
+        <h2 style="color:#2D5A27;margin-top:0;">Nuevo mensaje recibido</h2>
+
+        <div style="background:#fff;border:1px solid #ddd;border-radius:8px;padding:20px;margin-bottom:20px;">
+          <table style="width:100%;border-collapse:collapse;">
+            <tr>
+              <td style="padding:8px 0;color:#666;width:120px;">Nombre</td>
+              <td style="padding:8px 0;font-weight:bold;">${nombre}</td>
+            </tr>
+            <tr style="border-top:1px solid #f0f0f0;">
+              <td style="padding:8px 0;color:#666;">Email</td>
+              <td style="padding:8px 0;"><a href="mailto:${email}" style="color:#2D5A27;">${email}</a></td>
+            </tr>
+            <tr style="border-top:1px solid #f0f0f0;">
+              <td style="padding:8px 0;color:#666;">Teléfono</td>
+              <td style="padding:8px 0;">${telefono || '—'}</td>
+            </tr>
+            <tr style="border-top:1px solid #f0f0f0;">
+              <td style="padding:8px 0;color:#666;">Asunto</td>
+              <td style="padding:8px 0;"><strong>${asunto}</strong></td>
+            </tr>
+          </table>
+        </div>
+
+        <div style="background:#fff;border:1px solid #ddd;border-radius:8px;padding:20px;">
+          <p style="margin:0 0 8px;color:#666;font-size:13px;">MENSAJE</p>
+          <p style="margin:0;white-space:pre-line;line-height:1.6;">${mensaje}</p>
+        </div>
+
+        <div style="text-align:center;margin:28px 0 0;">
+          <a href="mailto:${email}?subject=Re: ${asunto}"
+             style="background:#2D5A27;color:#fff;padding:12px 24px;border-radius:8px;text-decoration:none;font-weight:bold;">
+            Responder al cliente
+          </a>
+        </div>
+      </div>
+      <div style="padding:16px;text-align:center;color:#999;font-size:12px;">
+        Mensaje enviado desde el formulario de contacto de CampOrganic
+      </div>
+    </div>
+    `
+  );
+};
+
 export const enviarCambioEstado = (nombre, email, pedido) => {
   const mensajes = {
     procesando: { titulo: "Tu pedido está en proceso", desc: "Estamos preparando tu pedido con cuidado." },

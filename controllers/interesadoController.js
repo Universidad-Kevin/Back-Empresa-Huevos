@@ -1,4 +1,5 @@
 import pool from "../config/database.js";
+import { enviarMensajeContacto } from "../services/emailService.js";
 
 export const getAllInteresados = async (req, res) => {
   try {
@@ -38,23 +39,17 @@ export const createInteresado = async (req, res) => {
     } = req.body;
     console.log("Datos recibidos para crear Interesado:", req.body);
 
-    if (!nombre || !email || !telefono) {
+    if (!nombre || !email || !asunto || !mensaje) {
       return res
         .status(400)
-        .json({ error: "Nombre, email y teléfono son requeridos" });
+        .json({ error: "Nombre, email, asunto y mensaje son requeridos" });
     }
 
     const [result] = await pool.execute(
-      `INSERT INTO interesados 
+      `INSERT INTO interesados
        (nombre, email, telefono, asunto, mensaje, creado_en)
        VALUES (?, ?, ?, ?, ?, NOW())`,
-      [
-        nombre,
-        email,
-        telefono,
-        asunto,
-        mensaje || null,
-      ]
+      [nombre, email, telefono || null, asunto, mensaje]
     );
 
     const [nuevoInteresado] = await pool.execute(
@@ -62,10 +57,13 @@ export const createInteresado = async (req, res) => {
       [result.insertId]
     );
 
+    // Enviar email al admin (no bloqueante)
+    enviarMensajeContacto({ nombre, email, telefono, asunto, mensaje });
+
     res.status(201).json({
       success: true,
       data: nuevoInteresado[0],
-      message: "Interesado creado exitosamente",
+      message: "Mensaje enviado exitosamente",
     });
   } catch (error) {
     console.error("Error creando interesado:", error);
