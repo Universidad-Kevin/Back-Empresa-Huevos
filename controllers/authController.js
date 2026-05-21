@@ -81,7 +81,7 @@ export const register = async (req, res) => {
     // Insertar usuario
     const [result] = await pool.query(
       "INSERT INTO usuarios (nombre, email, password, rol, activo) VALUES (?, ?, ?, ?, TRUE)",
-      [nombre, email, hashedPassword, "empleado"]
+      [nombre, email, hashedPassword, "cliente"]
     );
 
     // Enviar email de bienvenida (no bloqueante)
@@ -95,7 +95,7 @@ export const register = async (req, res) => {
         id: result.insertId,
         nombre,
         email,
-        rol: "empleado",
+        rol: "cliente",
       },
     });
   } catch (error) {
