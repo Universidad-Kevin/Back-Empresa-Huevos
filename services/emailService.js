@@ -64,8 +64,8 @@ export const enviarConfirmacionPedido = (nombre, email, pedido) => {
       <tr>
         <td style="padding:8px;border-bottom:1px solid #eee;">${i.nombre_producto}</td>
         <td style="padding:8px;border-bottom:1px solid #eee;text-align:center;">${i.cantidad}</td>
-        <td style="padding:8px;border-bottom:1px solid #eee;text-align:right;">$${parseFloat(i.precio_unitario).toFixed(2)}</td>
-        <td style="padding:8px;border-bottom:1px solid #eee;text-align:right;">$${(i.cantidad * i.precio_unitario).toFixed(2)}</td>
+        <td style="padding:8px;border-bottom:1px solid #eee;text-align:right;">S/.${parseFloat(i.precio_unitario).toFixed(2)}</td>
+        <td style="padding:8px;border-bottom:1px solid #eee;text-align:right;">S/.${(i.cantidad * i.precio_unitario).toFixed(2)}</td>
       </tr>`
     )
     .join("");
@@ -95,7 +95,7 @@ export const enviarConfirmacionPedido = (nombre, email, pedido) => {
           <tfoot>
             <tr>
               <td colspan="3" style="padding:12px;text-align:right;font-weight:bold;">Total:</td>
-              <td style="padding:12px;text-align:right;font-weight:bold;color:#2D5A27;">$${parseFloat(pedido.total).toFixed(2)}</td>
+              <td style="padding:12px;text-align:right;font-weight:bold;color:#2D5A27;">S/.${parseFloat(pedido.total).toFixed(2)}</td>
             </tr>
           </tfoot>
         </table>
@@ -139,8 +139,8 @@ export const enviarNotificacionAdmin = (pedido) => {
       <tr>
         <td style="padding:8px;border-bottom:1px solid #eee;">${i.nombre_producto}</td>
         <td style="padding:8px;border-bottom:1px solid #eee;text-align:center;">${i.cantidad}</td>
-        <td style="padding:8px;border-bottom:1px solid #eee;text-align:right;">$${parseFloat(i.precio_unitario).toFixed(2)}</td>
-        <td style="padding:8px;border-bottom:1px solid #eee;text-align:right;">$${(i.cantidad * i.precio_unitario).toFixed(2)}</td>
+        <td style="padding:8px;border-bottom:1px solid #eee;text-align:right;">S/.${parseFloat(i.precio_unitario).toFixed(2)}</td>
+        <td style="padding:8px;border-bottom:1px solid #eee;text-align:right;">S/.${(i.cantidad * i.precio_unitario).toFixed(2)}</td>
       </tr>`
     )
     .join("");
@@ -159,7 +159,7 @@ export const enviarNotificacionAdmin = (pedido) => {
 
         <div style="background:#fff;border:1px solid #ddd;border-radius:8px;padding:16px;margin:16px 0;">
           <p style="margin:4px 0;"><strong>Pedido #:</strong> ${pedido.id}</p>
-          <p style="margin:4px 0;"><strong>Total:</strong> $${parseFloat(pedido.total).toFixed(2)}</p>
+          <p style="margin:4px 0;"><strong>Total:</strong> S/.${parseFloat(pedido.total).toFixed(2)}</p>
           <p style="margin:4px 0;"><strong>Método de pago:</strong> ${metodoPagoLabel[pedido.metodo_pago] || pedido.metodo_pago}</p>
           <p style="margin:4px 0;"><strong>Estado:</strong> Pendiente</p>
         </div>
@@ -177,7 +177,7 @@ export const enviarNotificacionAdmin = (pedido) => {
           <tfoot>
             <tr>
               <td colspan="3" style="padding:12px;text-align:right;font-weight:bold;">Total:</td>
-              <td style="padding:12px;text-align:right;font-weight:bold;color:#1a3a6b;">$${parseFloat(pedido.total).toFixed(2)}</td>
+              <td style="padding:12px;text-align:right;font-weight:bold;color:#1a3a6b;">S/.${parseFloat(pedido.total).toFixed(2)}</td>
             </tr>
           </tfoot>
         </table>
