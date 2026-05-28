@@ -27,6 +27,69 @@ const enviar = async (to, subject, html) => {
   }
 };
 
+export const enviarContactoMayorista = (cliente, datos) => {
+  const adminEmail = process.env.ADMIN_EMAIL || process.env.EMAIL_USER;
+  if (!adminEmail) return;
+
+  const { asunto, mensaje } = datos;
+
+  return enviar(
+    adminEmail,
+    `📩 [Mayorista] ${cliente.nombre_empresa}: ${asunto}`,
+    `
+    <div style="font-family:sans-serif;max-width:600px;margin:auto;border:1px solid #ddd;border-radius:8px;overflow:hidden;">
+      <div style="background:#2D5A27;padding:24px 32px;">
+        <h1 style="color:#fff;margin:0;">🌿 CampOrganic</h1>
+        <p style="color:#c8e6c9;margin:4px 0 0;">Mensaje de cliente mayorista</p>
+      </div>
+      <div style="padding:32px;background:#f9f9f9;">
+        <h2 style="color:#2D5A27;margin-top:0;">Nuevo mensaje recibido</h2>
+
+        <div style="background:#fff;border:1px solid #ddd;border-radius:8px;padding:20px;margin-bottom:20px;">
+          <table style="width:100%;border-collapse:collapse;">
+            <tr>
+              <td style="padding:8px 0;color:#666;width:130px;">Empresa</td>
+              <td style="padding:8px 0;font-weight:bold;">${cliente.nombre_empresa}</td>
+            </tr>
+            <tr style="border-top:1px solid #f0f0f0;">
+              <td style="padding:8px 0;color:#666;">Contacto</td>
+              <td style="padding:8px 0;">${cliente.contacto_nombre}</td>
+            </tr>
+            <tr style="border-top:1px solid #f0f0f0;">
+              <td style="padding:8px 0;color:#666;">Email</td>
+              <td style="padding:8px 0;"><a href="mailto:${cliente.email}" style="color:#2D5A27;">${cliente.email}</a></td>
+            </tr>
+            <tr style="border-top:1px solid #f0f0f0;">
+              <td style="padding:8px 0;color:#666;">Teléfono</td>
+              <td style="padding:8px 0;">${cliente.telefono || '—'}</td>
+            </tr>
+            <tr style="border-top:1px solid #f0f0f0;">
+              <td style="padding:8px 0;color:#666;">Asunto</td>
+              <td style="padding:8px 0;"><strong>${asunto}</strong></td>
+            </tr>
+          </table>
+        </div>
+
+        <div style="background:#fff;border:1px solid #ddd;border-radius:8px;padding:20px;">
+          <p style="margin:0 0 8px;color:#666;font-size:13px;">MENSAJE</p>
+          <p style="margin:0;white-space:pre-line;line-height:1.6;">${mensaje}</p>
+        </div>
+
+        <div style="text-align:center;margin:28px 0 0;">
+          <a href="mailto:${cliente.email}?subject=Re: ${asunto}"
+             style="background:#2D5A27;color:#fff;padding:12px 24px;border-radius:8px;text-decoration:none;font-weight:bold;">
+            Responder al cliente
+          </a>
+        </div>
+      </div>
+      <div style="padding:16px 32px;background:#f0f0f0;text-align:center;font-size:12px;color:#999;">
+        Mensaje desde el portal mayorista de CampOrganic
+      </div>
+    </div>
+    `
+  );
+};
+
 export const enviarBienvenida = (nombre, email) =>
   enviar(
     email,
@@ -58,65 +121,116 @@ export const enviarConfirmacionPedido = (nombre, email, pedido) => {
     tarjeta: "💳 Tarjeta de crédito/débito",
   };
 
+  const fecha = new Date(pedido.creado_en || Date.now()).toLocaleDateString("es-PE", {
+    day: "2-digit", month: "long", year: "numeric",
+  });
+
   const itemsHTML = (pedido.items || [])
-    .map(
-      (i) => `
+    .map((i) => `
       <tr>
+        <td style="padding:8px;border-bottom:1px solid #eee;font-family:monospace;font-size:12px;color:#666;">
+          ${i.codigo_producto || "—"}
+        </td>
         <td style="padding:8px;border-bottom:1px solid #eee;">${i.nombre_producto}</td>
-        <td style="padding:8px;border-bottom:1px solid #eee;text-align:center;">${i.cantidad}</td>
-        <td style="padding:8px;border-bottom:1px solid #eee;text-align:right;">S/.${parseFloat(i.precio_unitario).toFixed(2)}</td>
-        <td style="padding:8px;border-bottom:1px solid #eee;text-align:right;">S/.${(i.cantidad * i.precio_unitario).toFixed(2)}</td>
-      </tr>`
-    )
+        <td style="padding:8px;border-bottom:1px solid #eee;text-align:center;">
+          ${i.cantidad} ${i.unidad || "uds."}
+        </td>
+        <td style="padding:8px;border-bottom:1px solid #eee;text-align:right;">
+          S/.${parseFloat(i.precio_unitario).toFixed(2)}
+        </td>
+        <td style="padding:8px;border-bottom:1px solid #eee;text-align:right;font-weight:bold;">
+          S/.${(i.cantidad * i.precio_unitario).toFixed(2)}
+        </td>
+      </tr>`)
     .join("");
 
   return enviar(
     email,
-    `Pedido #${pedido.id} confirmado — CampOrganic`,
+    `Recibo Pedido #${pedido.id} — CampOrganic`,
     `
-    <div style="font-family:sans-serif;max-width:600px;margin:auto;">
-      <div style="background:#2D5A27;padding:24px;text-align:center;">
-        <h1 style="color:#fff;margin:0;">CampOrganic</h1>
+    <div style="font-family:sans-serif;max-width:640px;margin:auto;border:1px solid #ddd;border-radius:8px;overflow:hidden;">
+      <!-- Encabezado -->
+      <div style="background:#2D5A27;padding:24px 32px;display:flex;justify-content:space-between;align-items:center;">
+        <div>
+          <h1 style="color:#fff;margin:0;font-size:24px;">🌿 CampOrganic</h1>
+          <p style="color:#c8e6c9;margin:4px 0 0;font-size:13px;">${process.env.EMAIL_USER || "camporganic@gmail.com"}</p>
+        </div>
+        <div style="text-align:right;">
+          <p style="color:#fff;margin:0;font-size:18px;font-weight:bold;">RECIBO #${pedido.id}</p>
+          <p style="color:#c8e6c9;margin:4px 0 0;font-size:13px;">${fecha}</p>
+        </div>
       </div>
-      <div style="padding:32px;background:#f9f9f9;">
-        <h2 style="color:#2D5A27;">¡Pedido confirmado, ${nombre}!</h2>
-        <p>Tu pedido <strong>#${pedido.id}</strong> fue recibido y está siendo procesado.</p>
 
-        <table style="width:100%;border-collapse:collapse;margin:24px 0;">
+      <!-- Datos del cliente -->
+      <div style="padding:20px 32px;background:#f0f7f0;border-bottom:1px solid #ddd;">
+        <p style="margin:0;font-size:13px;color:#666;">CLIENTE</p>
+        <p style="margin:4px 0 0;font-weight:bold;font-size:15px;">${nombre}</p>
+        <p style="margin:2px 0 0;color:#555;font-size:13px;">${email}</p>
+      </div>
+
+      <!-- Tabla de productos -->
+      <div style="padding:24px 32px;">
+        <table style="width:100%;border-collapse:collapse;">
           <thead>
             <tr style="background:#2D5A27;color:#fff;">
-              <th style="padding:10px;text-align:left;">Producto</th>
-              <th style="padding:10px;text-align:center;">Cant.</th>
-              <th style="padding:10px;text-align:right;">Precio</th>
-              <th style="padding:10px;text-align:right;">Subtotal</th>
+              <th style="padding:10px 8px;text-align:left;font-size:12px;">CÓD.</th>
+              <th style="padding:10px 8px;text-align:left;font-size:12px;">PRODUCTO</th>
+              <th style="padding:10px 8px;text-align:center;font-size:12px;">CANT.</th>
+              <th style="padding:10px 8px;text-align:right;font-size:12px;">P. UNIT.</th>
+              <th style="padding:10px 8px;text-align:right;font-size:12px;">SUBTOTAL</th>
             </tr>
           </thead>
           <tbody>${itemsHTML}</tbody>
           <tfoot>
             <tr>
-              <td colspan="3" style="padding:12px;text-align:right;font-weight:bold;">Total:</td>
-              <td style="padding:12px;text-align:right;font-weight:bold;color:#2D5A27;">S/.${parseFloat(pedido.total).toFixed(2)}</td>
+              <td colspan="4" style="padding:8px;text-align:right;color:#666;font-size:13px;">Envío:</td>
+              <td style="padding:8px;text-align:right;color:#2D5A27;font-size:13px;">Gratis</td>
+            </tr>
+            <tr style="border-top:2px solid #2D5A27;">
+              <td colspan="4" style="padding:12px 8px;text-align:right;font-weight:bold;font-size:16px;">TOTAL:</td>
+              <td style="padding:12px 8px;text-align:right;font-weight:bold;font-size:16px;color:#2D5A27;">
+                S/.${parseFloat(pedido.total).toFixed(2)}
+              </td>
             </tr>
           </tfoot>
         </table>
+      </div>
 
-        <p><strong>Método de pago:</strong> ${metodoPagoLabel[pedido.metodo_pago] || pedido.metodo_pago}</p>
-        ${pedido.metodo_pago === "transferencia"
-          ? `<div style="background:#e8f4fd;padding:16px;border-radius:8px;margin-top:12px;">
-               <strong>Datos bancarios:</strong><br/>
-               Banco: ${process.env.BANCO_NOMBRE || "—"}<br/>
-               Cuenta: ${process.env.BANCO_CUENTA || "—"}<br/>
-               Titular: ${process.env.BANCO_TITULAR || "—"}<br/>
-               <small>Tienes 48 horas para realizar la transferencia.</small>
-             </div>`
-          : ""}
-
-        <div style="text-align:center;margin:32px 0;">
-          <a href="${process.env.FRONTEND_URL || 'http://localhost:5173'}/mis-pedidos/${pedido.id}"
-             style="background:#2D5A27;color:#fff;padding:14px 28px;border-radius:8px;text-decoration:none;font-weight:bold;">
-            Ver mi pedido
-          </a>
+      <!-- Info de pago -->
+      <div style="padding:0 32px 24px;">
+        <div style="background:#f9f9f9;border:1px solid #eee;border-radius:6px;padding:16px;">
+          <p style="margin:0 0 8px;"><strong>Método de pago:</strong> ${metodoPagoLabel[pedido.metodo_pago] || pedido.metodo_pago}</p>
+          ${pedido.metodo_pago === "transferencia"
+            ? `<div style="background:#e8f4fd;padding:12px;border-radius:6px;margin-top:8px;font-size:13px;">
+                 <strong>Datos para transferencia:</strong><br/>
+                 Banco: ${process.env.BANCO_NOMBRE || "—"} &nbsp;|&nbsp;
+                 Cuenta: ${process.env.BANCO_CUENTA || "—"} &nbsp;|&nbsp;
+                 Titular: ${process.env.BANCO_TITULAR || "—"}<br/>
+                 <em style="color:#666;">Tienes 48 horas para realizar la transferencia.</em>
+               </div>`
+            : ""}
+          ${pedido.codigo_verificacion
+            ? `<p style="margin:12px 0 0;">
+                 <strong>Código de verificación:</strong>
+                 <span style="font-family:monospace;font-size:18px;color:#2D5A27;letter-spacing:0.3rem;margin-left:8px;">
+                   ${pedido.codigo_verificacion}
+                 </span>
+               </p>`
+            : ""}
         </div>
+      </div>
+
+      <!-- Botón -->
+      <div style="text-align:center;padding:0 32px 32px;">
+        <a href="${process.env.FRONTEND_URL || "http://localhost:5173"}/mis-pedidos/${pedido.id}"
+           style="background:#2D5A27;color:#fff;padding:14px 32px;border-radius:8px;text-decoration:none;font-weight:bold;display:inline-block;">
+          Ver pedido en línea
+        </a>
+      </div>
+
+      <!-- Footer -->
+      <div style="padding:16px 32px;background:#f0f0f0;text-align:center;font-size:12px;color:#999;">
+        CampOrganic &nbsp;·&nbsp; Productos orgánicos frescos &nbsp;·&nbsp; ${process.env.EMAIL_USER || "camporganic@gmail.com"}
       </div>
     </div>
     `
@@ -253,34 +367,113 @@ export const enviarMensajeContacto = (datos) => {
   );
 };
 
+export const enviarBienvenidaMayorista = (contacto, empresa, email, passwordPlain) =>
+  enviar(
+    email,
+    `Bienvenido al portal mayorista — CampOrganic`,
+    `
+    <div style="font-family:sans-serif;max-width:600px;margin:auto;border:1px solid #ddd;border-radius:8px;overflow:hidden;">
+      <div style="background:#2D5A27;padding:24px 32px;">
+        <h1 style="color:#fff;margin:0;">🌿 CampOrganic</h1>
+        <p style="color:#c8e6c9;margin:4px 0 0;">Portal Mayorista</p>
+      </div>
+      <div style="padding:32px;background:#f9f9f9;">
+        <h2 style="color:#2D5A27;margin-top:0;">¡Bienvenido, ${contacto}!</h2>
+        <p>Tu empresa <strong>${empresa}</strong> ya tiene acceso al portal mayorista de CampOrganic.</p>
+        <p>Desde el portal podrás ver todos tus pedidos, su estado, el detalle de cada uno y contactarnos directamente.</p>
+
+        <div style="background:#fff;border:1px solid #ddd;border-radius:6px;padding:20px;margin:24px 0;">
+          <p style="margin:0 0 8px;color:#666;font-size:13px;">TUS CREDENCIALES DE ACCESO</p>
+          <p style="margin:4px 0;"><strong>Email:</strong> ${email}</p>
+          <p style="margin:4px 0;"><strong>Contraseña:</strong>
+            <span style="font-family:monospace;background:#f0f0f0;padding:2px 8px;border-radius:4px;">${passwordPlain}</span>
+          </p>
+          <p style="margin:12px 0 0;font-size:12px;color:#999;">Por seguridad, te recomendamos cambiar tu contraseña en tu primer acceso.</p>
+        </div>
+
+        <div style="text-align:center;margin:28px 0;">
+          <a href="${process.env.FRONTEND_URL || "http://localhost:5173"}/mayorista"
+             style="background:#2D5A27;color:#fff;padding:14px 32px;border-radius:8px;text-decoration:none;font-weight:bold;display:inline-block;">
+            Acceder al Portal
+          </a>
+        </div>
+      </div>
+      <div style="padding:16px 32px;background:#f0f0f0;text-align:center;font-size:12px;color:#999;">
+        CampOrganic · ${process.env.EMAIL_USER || "camporganic@gmail.com"}
+      </div>
+    </div>
+    `
+  );
+
 export const enviarCambioEstado = (nombre, email, pedido) => {
   const mensajes = {
-    procesando: { titulo: "Tu pedido está en proceso", desc: "Estamos preparando tu pedido con cuidado." },
-    enviado:    { titulo: "Tu pedido fue enviado", desc: "Tu pedido está en camino. Llegará pronto." },
-    completado: { titulo: "Pedido entregado", desc: "¡Esperamos que disfrutes tu compra!" },
-    cancelado:  { titulo: "Pedido cancelado", desc: "Tu pedido fue cancelado. Contáctanos si tienes dudas." },
+    procesando: { titulo: "Tu pedido está en preparación", desc: "Estamos preparando tu pedido con cuidado.", icono: "📦" },
+    enviado:    { titulo: "Tu pedido está en camino", desc: "Tu pedido ya salió y llegará pronto.", icono: "🚚" },
+    completado: { titulo: "Pedido entregado", desc: "¡Esperamos que disfrutes tu compra!", icono: "✅" },
+    cancelado:  { titulo: "Pedido cancelado", desc: "Tu pedido fue cancelado. Contáctanos si tienes dudas.", icono: "❌" },
   };
 
-  const info = mensajes[pedido.estado] || { titulo: `Estado: ${pedido.estado}`, desc: "" };
+  const estadoDisplay = { pendiente: "Pendiente", procesando: "En Preparación", enviado: "En Camino", completado: "Entregado", cancelado: "Cancelado" };
+  const info = mensajes[pedido.estado] || { titulo: `Estado actualizado`, desc: "", icono: "📋" };
+
+  const itemsHTML = (pedido.items || []).length > 0
+    ? `<table style="width:100%;border-collapse:collapse;margin:16px 0;">
+        <thead>
+          <tr style="background:#2D5A27;color:#fff;">
+            <th style="padding:8px;text-align:left;font-size:12px;">PRODUCTO</th>
+            <th style="padding:8px;text-align:center;font-size:12px;">CANT.</th>
+            <th style="padding:8px;text-align:right;font-size:12px;">SUBTOTAL</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${(pedido.items || []).map(i => `
+            <tr>
+              <td style="padding:8px;border-bottom:1px solid #eee;">${i.nombre_producto}</td>
+              <td style="padding:8px;border-bottom:1px solid #eee;text-align:center;">${i.cantidad} ${i.unidad || "uds."}</td>
+              <td style="padding:8px;border-bottom:1px solid #eee;text-align:right;">S/.${(i.cantidad * i.precio_unitario).toFixed(2)}</td>
+            </tr>`).join("")}
+        </tbody>
+        <tfoot>
+          <tr>
+            <td colspan="2" style="padding:8px;text-align:right;font-weight:bold;">Total:</td>
+            <td style="padding:8px;text-align:right;font-weight:bold;color:#2D5A27;">S/.${parseFloat(pedido.total).toFixed(2)}</td>
+          </tr>
+        </tfoot>
+      </table>`
+    : "";
 
   return enviar(
     email,
-    `${info.titulo} — Pedido #${pedido.id}`,
+    `${info.icono} ${info.titulo} — Pedido #${pedido.id}`,
     `
-    <div style="font-family:sans-serif;max-width:600px;margin:auto;">
-      <div style="background:#2D5A27;padding:24px;text-align:center;">
-        <h1 style="color:#fff;margin:0;">CampOrganic</h1>
+    <div style="font-family:sans-serif;max-width:600px;margin:auto;border:1px solid #ddd;border-radius:8px;overflow:hidden;">
+      <div style="background:#2D5A27;padding:24px 32px;display:flex;justify-content:space-between;align-items:center;">
+        <div>
+          <h1 style="color:#fff;margin:0;font-size:22px;">🌿 CampOrganic</h1>
+          <p style="color:#c8e6c9;margin:4px 0 0;font-size:13px;">Actualización de pedido</p>
+        </div>
+        <div style="text-align:right;">
+          <p style="color:#fff;margin:0;font-weight:bold;">PEDIDO #${pedido.id}</p>
+        </div>
       </div>
       <div style="padding:32px;background:#f9f9f9;">
-        <h2 style="color:#2D5A27;">${info.titulo}</h2>
+        <h2 style="color:#2D5A27;margin-top:0;">${info.icono} ${info.titulo}</h2>
         <p>Hola <strong>${nombre}</strong>, ${info.desc}</p>
-        <p>Tu pedido <strong>#${pedido.id}</strong> ahora está en estado: <strong>${pedido.estado}</strong>.</p>
+        <p style="margin-bottom:4px;">Estado actual:
+          <strong style="background:#2D5A27;color:#fff;padding:2px 10px;border-radius:20px;font-size:13px;">
+            ${estadoDisplay[pedido.estado] || pedido.estado}
+          </strong>
+        </p>
+        ${itemsHTML}
         <div style="text-align:center;margin:32px 0;">
           <a href="${process.env.FRONTEND_URL || 'http://localhost:5173'}/mis-pedidos/${pedido.id}"
              style="background:#2D5A27;color:#fff;padding:14px 28px;border-radius:8px;text-decoration:none;font-weight:bold;">
             Ver mi pedido
           </a>
         </div>
+      </div>
+      <div style="padding:16px 32px;background:#f0f0f0;text-align:center;font-size:12px;color:#999;">
+        CampOrganic · Productos orgánicos frescos · ${process.env.EMAIL_USER || "camporganic@gmail.com"}
       </div>
     </div>
     `

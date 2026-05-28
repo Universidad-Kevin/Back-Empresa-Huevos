@@ -5,6 +5,7 @@ import {
   getPedidoById,
   getAllPedidos,
   updateEstadoPedido,
+  cancelarPedidoCliente,
   getPedidosPendientesCount,
   verificarPedidoPorCodigo,
 } from "../controllers/pedidosController.js";
@@ -12,9 +13,10 @@ import { authenticateToken } from "../middleware/auth.js";
 
 const router = express.Router();
 
-// Cliente: crear pedido y ver los propios
+// Cliente: crear pedido, ver los propios, cancelar
 router.post("/", authenticateToken, createPedido);
 router.get("/mis-pedidos", authenticateToken, getMisPedidos);
+router.post("/:id/cancelar", authenticateToken, cancelarPedidoCliente);
 router.get("/:id", authenticateToken, getPedidoById);
 
 // Admin: ver todos, cambiar estado, verificar por código y conteo

@@ -102,6 +102,8 @@ export const createProducto = async (req, res) => {
       stock,
       estado,
       caracteristicas,
+      codigo,
+      unidad,
     } = req.body;
     console.log("Datos recibidos para crear producto:", req.body);
 
@@ -112,16 +114,18 @@ export const createProducto = async (req, res) => {
     }
 
     const [result] = await pool.query(
-      `INSERT INTO productos 
-       (nombre, descripcion, precio, categoria, imagen, stock, estado, caracteristicas, creado_en)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, NOW())`,
+      `INSERT INTO productos
+       (codigo, nombre, descripcion, precio, categoria, imagen, stock, unidad, estado, caracteristicas, creado_en)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())`,
       [
+        codigo || null,
         nombre,
         descripcion || null,
         precio,
         categoria,
         imagen || null,
         stock !== undefined ? stock : 0,
+        unidad || 'unidad',
         estado || 'activo',
         JSON.stringify(caracteristicas || []),
       ]
@@ -156,6 +160,8 @@ export const updateProducto = async (req, res) => {
       stock,
       estado,
       caracteristicas,
+      codigo,
+      unidad,
     } = req.body;
 
     console.log("Actualizando producto ID:", id, "con datos:", req.body);
@@ -200,23 +206,27 @@ export const updateProducto = async (req, res) => {
     const updateStock = stock !== undefined ? stock : currentProduct.stock;
     const updateImagen = imagen !== undefined ? imagen : currentProduct.imagen;
     const updateDescripcion = descripcion !== undefined ? descripcion : currentProduct.descripcion;
+    const updateCodigo = codigo !== undefined ? codigo || null : currentProduct.codigo;
+    const updateUnidad = unidad || currentProduct.unidad || 'unidad';
     let updateCaracteristicas = currentProduct.caracteristicas;
     if (caracteristicas !== undefined) {
       updateCaracteristicas = typeof caracteristicas === 'string' ? caracteristicas : JSON.stringify(caracteristicas);
     }
 
     const [result] = await pool.query(
-      `UPDATE productos 
-       SET nombre = ?, descripcion = ?, precio = ?, categoria = ?, 
-           imagen = ?, stock = ?, estado = ?, caracteristicas = ?, actualizado_en = CURRENT_TIMESTAMP
+      `UPDATE productos
+       SET codigo = ?, nombre = ?, descripcion = ?, precio = ?, categoria = ?,
+           imagen = ?, stock = ?, unidad = ?, estado = ?, caracteristicas = ?, actualizado_en = CURRENT_TIMESTAMP
        WHERE id = ?`,
       [
+        updateCodigo,
         nombre,
         updateDescripcion,
         precio,
         categoria,
         updateImagen,
         updateStock,
+        updateUnidad,
         updateEstado,
         updateCaracteristicas,
         id,
@@ -242,14 +252,13 @@ export const updateProducto = async (req, res) => {
   }
 };
 
-// Eliminar producto (inactivar)
+// Eliminar producto (soft delete — inactiva para no romper FK con detalle_pedidos)
 export const deleteProducto = async (req, res) => {
   try {
     const { id } = req.params;
-    console.log("Eliminando producto ID:", id);
 
     const [result] = await pool.query(
-      "DELETE FROM productos WHERE id = ?",
+      "UPDATE productos SET estado = 'inactivo', actualizado_en = CURRENT_TIMESTAMP WHERE id = ?",
       [id]
     );
 
@@ -257,9 +266,9 @@ export const deleteProducto = async (req, res) => {
       return res.status(404).json({ error: "Producto no encontrado" });
     }
 
-    res.json({ success: true, message: "Producto eliminado exitosamente" });
+    res.json({ success: true, message: "Producto desactivado exitosamente" });
   } catch (error) {
-    console.error("Error eliminando producto:", error);
+    console.error("Error desactivando producto:", error);
     res.status(500).json({ error: "Error del servidor" });
   }
 };

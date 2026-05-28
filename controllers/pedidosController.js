@@ -144,7 +144,10 @@ export const getMisPedidos = async (req, res) => {
 
     for (const pedido of pedidos) {
       const [detalle] = await pool.execute(
-        "SELECT * FROM detalle_pedidos WHERE pedido_id = ?",
+        `SELECT dp.*, p.codigo AS codigo_producto, p.unidad
+         FROM detalle_pedidos dp
+         LEFT JOIN productos p ON dp.producto_id = p.id
+         WHERE dp.pedido_id = ?`,
         [pedido.id]
       );
       pedido.items = detalle;
@@ -177,7 +180,10 @@ export const getPedidoById = async (req, res) => {
     }
 
     const [detalle] = await pool.execute(
-      "SELECT * FROM detalle_pedidos WHERE pedido_id = ?",
+      `SELECT dp.*, p.codigo AS codigo_producto, p.unidad
+       FROM detalle_pedidos dp
+       LEFT JOIN productos p ON dp.producto_id = p.id
+       WHERE dp.pedido_id = ?`,
       [id]
     );
 
@@ -196,7 +202,10 @@ export const getAllPedidos = async (req, res) => {
 
     for (const pedido of pedidos) {
       const [detalle] = await pool.execute(
-        "SELECT * FROM detalle_pedidos WHERE pedido_id = ?",
+        `SELECT dp.*, p.codigo AS codigo_producto, p.unidad
+         FROM detalle_pedidos dp
+         LEFT JOIN productos p ON dp.producto_id = p.id
+         WHERE dp.pedido_id = ?`,
         [pedido.id]
       );
       pedido.items = detalle;
@@ -247,32 +256,111 @@ export const getPedidosPendientesCount = async (req, res) => {
   }
 };
 
+const restaurarStock = async (pedidoId) => {
+  const [items] = await pool.execute(
+    "SELECT producto_id, cantidad FROM detalle_pedidos WHERE pedido_id = ?",
+    [pedidoId]
+  );
+  for (const item of items) {
+    await pool.execute(
+      "UPDATE productos SET stock = stock + ? WHERE id = ?",
+      [item.cantidad, item.producto_id]
+    );
+  }
+};
+
+export const cancelarPedidoCliente = async (req, res) => {
+  const { id } = req.params;
+  const { motivo } = req.body;
+  const usuario_id = req.user.id;
+
+  if (!motivo?.trim()) {
+    return res.status(400).json({ error: "Debes indicar un motivo para cancelar el pedido" });
+  }
+
+  try {
+    const [pedidos] = await pool.execute(
+      "SELECT id, estado, usuario_id FROM pedidos WHERE id = ? AND usuario_id = ?",
+      [id, usuario_id]
+    );
+
+    if (pedidos.length === 0) {
+      return res.status(404).json({ error: "Pedido no encontrado" });
+    }
+
+    const pedido = pedidos[0];
+    const cancelables = ["pendiente", "procesando"];
+
+    if (!cancelables.includes(pedido.estado)) {
+      const estadoLabel = { enviado: "En Camino", completado: "Entregado", cancelado: "ya cancelado" };
+      return res.status(400).json({
+        error: `No puedes cancelar este pedido porque está ${estadoLabel[pedido.estado] || pedido.estado}. Solo se pueden cancelar pedidos Pendientes o En Preparación.`,
+      });
+    }
+
+    await restaurarStock(id);
+
+    await pool.execute(
+      "UPDATE pedidos SET estado = 'cancelado', motivo_cancelacion = ? WHERE id = ?",
+      [motivo.trim(), id]
+    );
+
+    res.json({ success: true, message: "Pedido cancelado. El stock fue restaurado." });
+  } catch (err) {
+    console.error("Error cancelarPedidoCliente:", err);
+    res.status(500).json({ error: "Error al cancelar el pedido" });
+  }
+};
+
 export const updateEstadoPedido = async (req, res) => {
   try {
     const { id } = req.params;
-    const { estado } = req.body;
+    const { estado, motivo } = req.body;
     const estadosValidos = ["pendiente", "procesando", "enviado", "completado", "cancelado"];
 
     if (!estadosValidos.includes(estado)) {
       return res.status(400).json({ error: "Estado no válido" });
     }
 
-    const [result] = await pool.execute(
-      "UPDATE pedidos SET estado = ? WHERE id = ?",
-      [estado, id]
-    );
+    if (estado === "cancelado" && !motivo?.trim()) {
+      return res.status(400).json({ error: "Debes indicar un motivo para cancelar el pedido" });
+    }
 
-    if (result.affectedRows === 0) {
-      return res.status(404).json({ error: "Pedido no encontrado" });
+    const [existing] = await pool.execute("SELECT estado FROM pedidos WHERE id = ?", [id]);
+    if (existing.length === 0) return res.status(404).json({ error: "Pedido no encontrado" });
+
+    if (estado === "cancelado") {
+      await restaurarStock(id);
+      await pool.execute(
+        "UPDATE pedidos SET estado = 'cancelado', motivo_cancelacion = ? WHERE id = ?",
+        [motivo.trim(), id]
+      );
+    } else {
+      await pool.execute("UPDATE pedidos SET estado = ? WHERE id = ?", [estado, id]);
     }
 
     // Email de cambio de estado (no bloqueante)
     const [pedidoData] = await pool.execute(
-      "SELECT p.*, u.nombre as cliente_nombre, u.email as cliente_email FROM pedidos p JOIN usuarios u ON p.usuario_id = u.id WHERE p.id = ?",
+      `SELECT p.total, p.metodo_pago,
+        COALESCE(u.nombre, c.contacto_nombre) AS cliente_nombre,
+        COALESCE(u.email, c.email) AS cliente_email
+       FROM pedidos p
+       LEFT JOIN usuarios u ON p.usuario_id = u.id
+       LEFT JOIN clientes c ON p.cliente_id = c.id
+       WHERE p.id = ?`,
       [id]
     );
     if (pedidoData.length > 0) {
-      enviarCambioEstado(pedidoData[0].cliente_nombre, pedidoData[0].cliente_email, { id, estado });
+      const [items] = await pool.execute(
+        `SELECT dp.nombre_producto, dp.cantidad, dp.precio_unitario, pr.unidad
+         FROM detalle_pedidos dp
+         LEFT JOIN productos pr ON dp.producto_id = pr.id
+         WHERE dp.pedido_id = ?`,
+        [id]
+      );
+      enviarCambioEstado(pedidoData[0].cliente_nombre, pedidoData[0].cliente_email, {
+        id, estado, total: pedidoData[0].total, items,
+      });
     }
 
     res.json({ success: true, message: `Pedido actualizado a "${estado}"` });

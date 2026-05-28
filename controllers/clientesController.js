@@ -1,4 +1,6 @@
 import pool from "../config/database.js";
+import bcrypt from "bcryptjs";
+import { enviarBienvenidaMayorista } from "../services/emailService.js";
 
 // // Obtener todos los clientes
 // export const getClientes = async (req, res) => {
@@ -44,6 +46,7 @@ export const createCliente = async (req, res) => {
       tipo_cliente,
       limite_credito,
       estado,
+      password,
     } = req.body;
 
     if (!nombre_empresa || !tipo_negocio || !contacto_nombre || !email) {
@@ -53,10 +56,16 @@ export const createCliente = async (req, res) => {
       });
     }
 
+    if (!password || password.length < 6) {
+      return res.status(400).json({ error: "La contraseña debe tener al menos 6 caracteres" });
+    }
+
+    const hashedPassword = await bcrypt.hash(password, 10);
+
     const [result] = await pool.query(
-      `INSERT INTO clientes 
-       (nombre_empresa, tipo_negocio, contacto_nombre, email, telefono, direccion, ruc, tipo_cliente, limite_credito, estado, creado_en)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())`,
+      `INSERT INTO clientes
+       (nombre_empresa, tipo_negocio, contacto_nombre, email, telefono, direccion, ruc, tipo_cliente, limite_credito, estado, password, creado_en)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())`,
       [
         nombre_empresa,
         tipo_negocio,
@@ -68,6 +77,7 @@ export const createCliente = async (req, res) => {
         tipo_cliente || "Mayorista",
         limite_credito || 0,
         estado || "activo",
+        hashedPassword,
       ]
     );
 
@@ -225,6 +235,34 @@ export const getClientesInactivos = async (req, res) => {
     res.json({ success: true, data: rows });
   } catch (error) {
     console.error("Error obteniendo clientes inactivos:", error);
+    res.status(500).json({ error: "Error del servidor" });
+  }
+};
+
+export const asignarCredenciales = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { password, enviarEmail } = req.body;
+
+    if (!password || password.length < 6) {
+      return res.status(400).json({ error: "La contraseña debe tener al menos 6 caracteres" });
+    }
+
+    const [rows] = await pool.query("SELECT id, contacto_nombre, nombre_empresa, email FROM clientes WHERE id = ?", [id]);
+    if (rows.length === 0) return res.status(404).json({ error: "Cliente no encontrado" });
+
+    const salt = await bcrypt.genSalt(10);
+    const hashed = await bcrypt.hash(password, salt);
+
+    await pool.query("UPDATE clientes SET password = ? WHERE id = ?", [hashed, id]);
+
+    if (enviarEmail !== false) {
+      enviarBienvenidaMayorista(rows[0].contacto_nombre, rows[0].nombre_empresa, rows[0].email, password);
+    }
+
+    res.json({ success: true, message: "Credenciales asignadas correctamente" });
+  } catch (error) {
+    console.error("Error asignando credenciales:", error);
     res.status(500).json({ error: "Error del servidor" });
   }
 };

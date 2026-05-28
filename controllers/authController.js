@@ -6,52 +6,64 @@ import { enviarBienvenida } from "../services/emailService.js";
 export const login = async (req, res) => {
   try {
     const { email, password } = req.body;
-    console.log("Intento de login para:", req.body);
 
-    // Buscar usuario
+    // 1. Buscar en usuarios
     const [users] = await pool.query(
       "SELECT * FROM usuarios WHERE email = ? AND activo = TRUE",
       [email]
     );
-    console.log("Usuarios encontrados:", users);
-    if (users.length === 0) {
-      return res.status(401).json({ error: "Credenciales incorrectas" });
-    }
 
-    const user = users[0];
+    if (users.length > 0) {
+      const user = users[0];
+      const validPassword = await bcrypt.compare(password, user.password);
+      if (!validPassword) return res.status(401).json({ error: "Credenciales incorrectas" });
 
-    // Verificar contraseña
-    const validPassword = await bcrypt.compare(password, user.password);
-    console.log(
-      "Validación de contraseña:",
-      validPassword,
-      user.password,
-      password
-    );
-    if (!validPassword) {
-      return res.status(401).json({ error: "Credenciales incorrectas" });
-    }
-
-    // Generar token JWT
-    const token = jwt.sign(
-      { userId: user.id, email: user.email, rol: user.rol },
-      process.env.JWT_SECRET,
-      { expiresIn: "24h" }
-    );
-
-    // Respuesta al cliente
-    res.json({
-      success: true,
-      data: {
-        user: {
-          id: user.id,
-          nombre: user.nombre,
-          email: user.email,
-          rol: user.rol,
+      const token = jwt.sign(
+        { userId: user.id, email: user.email, rol: user.rol, tabla: "usuarios" },
+        process.env.JWT_SECRET,
+        { expiresIn: "24h" }
+      );
+      return res.json({
+        success: true,
+        data: {
+          user: { id: user.id, nombre: user.nombre, email: user.email, rol: user.rol },
+          token,
         },
-        token,
-      },
-    });
+      });
+    }
+
+    // 2. Buscar en clientes (mayoristas)
+    const [clientes] = await pool.query(
+      "SELECT * FROM clientes WHERE email = ? AND password IS NOT NULL AND estado = 'activo'",
+      [email]
+    );
+
+    if (clientes.length > 0) {
+      const cliente = clientes[0];
+      const validPassword = await bcrypt.compare(password, cliente.password);
+      if (!validPassword) return res.status(401).json({ error: "Credenciales incorrectas" });
+
+      const token = jwt.sign(
+        { userId: cliente.id, email: cliente.email, rol: "mayorista", tabla: "clientes" },
+        process.env.JWT_SECRET,
+        { expiresIn: "24h" }
+      );
+      return res.json({
+        success: true,
+        data: {
+          user: {
+            id: cliente.id,
+            nombre: cliente.contacto_nombre,
+            nombre_empresa: cliente.nombre_empresa,
+            email: cliente.email,
+            rol: "mayorista",
+          },
+          token,
+        },
+      });
+    }
+
+    return res.status(401).json({ error: "Credenciales incorrectas" });
   } catch (error) {
     console.error("❌ Error en login:", error);
     res.status(500).json({ error: "Error del servidor" });

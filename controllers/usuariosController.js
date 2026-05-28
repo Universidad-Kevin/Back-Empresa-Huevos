@@ -27,6 +27,25 @@ export const getAllUsuarios = async (req, res) => {
   }
 };
 
+export const deleteUsuario = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const [rows] = await pool.execute("SELECT id, rol FROM usuarios WHERE id = ?", [id]);
+    if (rows.length === 0) return res.status(404).json({ error: "Usuario no encontrado" });
+    if (rows[0].rol === "admin") return res.status(403).json({ error: "No se puede eliminar un administrador" });
+
+    // Eliminar pedidos primero (detalle_pedidos se borra en cascada)
+    await pool.execute("DELETE FROM pedidos WHERE usuario_id = ?", [id]);
+    await pool.execute("DELETE FROM usuarios WHERE id = ?", [id]);
+
+    res.json({ success: true, message: "Usuario eliminado correctamente" });
+  } catch (error) {
+    console.error("Error eliminando usuario:", error);
+    res.status(500).json({ error: "Error del servidor" });
+  }
+};
+
 export const updateMiPerfil = async (req, res) => {
   try {
     const { nombre, email, password_actual, password_nuevo } = req.body;

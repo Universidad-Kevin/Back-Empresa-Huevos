@@ -12,6 +12,7 @@ import interesadosRoutes from "./routes/interesados.js";
 import pedidosRoutes from "./routes/pedidos.js";
 import usuariosRoutes from "./routes/usuarios.js";
 import carritoRoutes from "./routes/carrito.js";
+import mayoristaRoutes from "./routes/mayorista.js";
 
 dotenv.config();
 
@@ -72,6 +73,7 @@ app.use("/interesados", interesadosRoutes);
 app.use("/pedidos", pedidosRoutes);
 app.use("/usuarios", usuariosRoutes);
 app.use("/carrito", carritoRoutes);
+app.use("/mayorista", mayoristaRoutes);
 
 // Endpoint de health check
 app.get("/health", (req, res) => {

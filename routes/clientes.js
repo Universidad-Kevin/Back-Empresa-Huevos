@@ -9,6 +9,7 @@ import {
   deleteCliente,
   reactivarCliente,
   getAllClientes,
+  asignarCredenciales,
 } from "../controllers/clientesController.js";
 import { authenticateToken } from "../middleware/auth.js";
 
@@ -26,5 +27,6 @@ router.post("/", authenticateToken, createCliente);
 router.put("/:id", authenticateToken, updateCliente);
 router.delete("/:id", authenticateToken, deleteCliente);
 router.put("/:id/reactivar", authenticateToken, reactivarCliente);
+router.post("/:id/credenciales", authenticateToken, asignarCredenciales);
 
 export default router;
