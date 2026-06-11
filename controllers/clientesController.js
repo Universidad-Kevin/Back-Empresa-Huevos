@@ -2,6 +2,8 @@ import pool from "../config/database.js";
 import bcrypt from "bcryptjs";
 import { enviarBienvenidaMayorista } from "../services/emailService.js";
 
+const CLIENTE_FIELDS = "id, nombre_empresa, tipo_negocio, contacto_nombre, email, telefono, direccion, ruc, tipo_cliente, limite_credito, estado, creado_en, actualizado_en";
+
 // // Obtener todos los clientes
 // export const getClientes = async (req, res) => {
 //   try {
@@ -18,7 +20,7 @@ import { enviarBienvenidaMayorista } from "../services/emailService.js";
 export const getClienteById = async (req, res) => {
   try {
     const { id } = req.params;
-    const [rows] = await pool.query("SELECT * FROM clientes WHERE id = ?", [
+    const [rows] = await pool.query(`SELECT ${CLIENTE_FIELDS} FROM clientes WHERE id = ?`, [
       id,
     ]);
 
@@ -142,7 +144,7 @@ export const updateCliente = async (req, res) => {
     }
 
     const [clienteActualizado] = await pool.query(
-      "SELECT * FROM clientes WHERE id = ?",
+      `SELECT ${CLIENTE_FIELDS} FROM clientes WHERE id = ?`,
       [id]
     );
 
@@ -203,7 +205,7 @@ export const reactivarCliente = async (req, res) => {
 export const getAllClientes= async (req, res) => {
   try {
     const [rows] = await pool.query(
-      "SELECT * FROM clientes ORDER BY creado_en DESC"
+      `SELECT ${CLIENTE_FIELDS} FROM clientes ORDER BY creado_en DESC`
     );
     res.json({ success: true, data: rows });
   } catch (error) {
@@ -216,7 +218,7 @@ export const getAllClientes= async (req, res) => {
 export const getClientesActivos = async (req, res) => {
   try {
     const [rows] = await pool.query(
-      "SELECT * FROM clientes WHERE estado = 'activo' ORDER BY creado_en DESC"
+      `SELECT ${CLIENTE_FIELDS} FROM clientes WHERE estado = 'activo' ORDER BY creado_en DESC`
     );
 
     res.json({ success: true, data: rows });
@@ -230,7 +232,7 @@ export const getClientesActivos = async (req, res) => {
 export const getClientesInactivos = async (req, res) => {
   try {
     const [rows] = await pool.query(
-      "SELECT * FROM clientes WHERE estado = 'inactivo' ORDER BY creado_en DESC"
+      `SELECT ${CLIENTE_FIELDS} FROM clientes WHERE estado = 'inactivo' ORDER BY creado_en DESC`
     );
     res.json({ success: true, data: rows });
   } catch (error) {
@@ -267,11 +269,39 @@ export const asignarCredenciales = async (req, res) => {
   }
 };
 
+// SDI-66: Cambiar estado de cliente (activo/inactivo/pendiente)
+export const patchEstadoCliente = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { estado } = req.body;
+
+    if (!["activo", "inactivo", "pendiente"].includes(estado)) {
+      return res.status(400).json({ error: "Estado inválido. Use: activo, inactivo, pendiente" });
+    }
+
+    const [result] = await pool.query(
+      "UPDATE clientes SET estado = ?, actualizado_en = NOW() WHERE id = ?",
+      [estado, id]
+    );
+
+    if (result.affectedRows === 0) {
+      return res.status(404).json({ error: "Cliente no encontrado" });
+    }
+
+    const [rows] = await pool.query(`SELECT ${CLIENTE_FIELDS} FROM clientes WHERE id = ?`, [id]);
+    const labels = { activo: "activado", inactivo: "desactivado", pendiente: "marcado como pendiente" };
+    res.json({ success: true, data: rows[0], message: `Cliente ${labels[estado]} exitosamente` });
+  } catch (error) {
+    console.error("Error cambiando estado de cliente:", error);
+    res.status(500).json({ error: "Error del servidor" });
+  }
+};
+
 // Obtener clientes pendientes
 export const getClientesPendientes = async (req, res) => {
   try {
     const [rows] = await pool.query(
-      "SELECT * FROM clientes WHERE estado = 'pendiente' ORDER BY creado_en DESC"
+      `SELECT ${CLIENTE_FIELDS} FROM clientes WHERE estado = 'pendiente' ORDER BY creado_en DESC`
     );
     res.json({ success: true, data: rows });
   } catch (error) {

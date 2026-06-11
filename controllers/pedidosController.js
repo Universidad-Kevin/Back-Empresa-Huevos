@@ -1,6 +1,9 @@
 import crypto from "crypto";
 import pool from "../config/database.js";
 import { enviarConfirmacionPedido, enviarCambioEstado, enviarNotificacionAdmin } from "../services/emailService.js";
+import { crearNotificacion, MENSAJES } from "../services/notificacionesService.js";
+import { registrarMovimiento, verificarAlertaStock } from "./inventarioController.js";
+import { _validarLogica, _calcularDescuento } from "./cuponesController.js";
 
 const generarCodigo = () => {
   const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"; // sin 0,O,I,1 para evitar confusión
@@ -15,11 +18,13 @@ const crearTablas = async () => {
     CREATE TABLE IF NOT EXISTS pedidos (
       id INT AUTO_INCREMENT PRIMARY KEY,
       usuario_id INT NOT NULL,
-      estado ENUM('pendiente','procesando','enviado','completado','cancelado') DEFAULT 'pendiente',
-      metodo_pago ENUM('efectivo','transferencia','tarjeta') NOT NULL DEFAULT 'efectivo',
+      estado ENUM('pendiente','confirmado','preparando','enviado','entregado','cancelado','devuelto') DEFAULT 'pendiente',
+      metodo_pago ENUM('efectivo','yape','plin','transferencia','tarjeta') NOT NULL DEFAULT 'efectivo',
       estado_pago ENUM('pendiente','pagado') NOT NULL DEFAULT 'pendiente',
       total DECIMAL(10,2) NOT NULL,
       nota TEXT,
+      codigo_verificacion VARCHAR(20) UNIQUE,
+      motivo_cancelacion TEXT,
       creado_en TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
       actualizado_en TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
       FOREIGN KEY (usuario_id) REFERENCES usuarios(id)
@@ -44,35 +49,24 @@ crearTablas().catch((e) => console.error("Error creando tablas de pedidos:", e))
 export const createPedido = async (req, res) => {
   const conn = await pool.getConnection();
   try {
-    const { items, nota, metodo_pago } = req.body;
+    const { items, nota, metodo_pago, cupon_codigo } = req.body;
     const usuarioId = req.user.id;
 
+    // Validaciones sin BD (rápidas, antes de cualquier transacción)
     if (!items || !Array.isArray(items) || items.length === 0) {
       return res.status(400).json({ error: "El pedido debe tener al menos un producto" });
     }
-
-    const metodosValidos = ["efectivo", "transferencia", "tarjeta"];
+    const metodosValidos = ["efectivo", "yape", "plin", "transferencia", "tarjeta"];
     if (!metodo_pago || !metodosValidos.includes(metodo_pago)) {
       return res.status(400).json({ error: "Método de pago no válido" });
     }
-
-    // Validar stock de cada producto
     for (const item of items) {
-      const [rows] = await conn.execute(
-        "SELECT id, nombre, stock FROM productos WHERE id = ? AND estado = 'activo'",
-        [item.producto_id]
-      );
-      if (rows.length === 0) {
-        return res.status(400).json({ error: `Producto ${item.producto_id} no encontrado o inactivo` });
-      }
-      if (rows[0].stock < item.cantidad) {
-        return res.status(400).json({ error: `Stock insuficiente para "${rows[0].nombre}"` });
+      if (!item.producto_id || !Number.isInteger(item.cantidad) || item.cantidad < 1) {
+        return res.status(400).json({ error: "Item con producto_id o cantidad inválidos" });
       }
     }
 
-    const total = items.reduce((sum, i) => sum + i.precio_unitario * i.cantidad, 0);
-
-    // Generar código único (reintenta si colisiona)
+    // Generar código único fuera de la transacción (evita contaminar el rollback)
     let codigo;
     for (let intentos = 0; intentos < 5; intentos++) {
       const candidato = generarCodigo();
@@ -83,27 +77,87 @@ export const createPedido = async (req, res) => {
     }
     if (!codigo) throw new Error("No se pudo generar código único");
 
+    // ── INICIO DE TRANSACCIÓN ──────────────────────────────────────
     await conn.beginTransaction();
 
+    // SELECT FOR UPDATE: bloquea las filas de productos para evitar
+    // condiciones de carrera cuando dos pedidos concurrentes solicitan
+    // el mismo producto con stock limitado.
+    const itemsVerificados = [];
+    for (const item of items) {
+      const [rows] = await conn.execute(
+        "SELECT id, nombre, precio, stock FROM productos WHERE id = ? AND estado = 'activo' FOR UPDATE",
+        [item.producto_id]
+      );
+      if (rows.length === 0) {
+        await conn.rollback();
+        return res.status(400).json({ error: `Producto ${item.producto_id} no encontrado o inactivo` });
+      }
+      if (rows[0].stock < item.cantidad) {
+        await conn.rollback();
+        return res.status(400).json({ error: `Stock insuficiente para "${rows[0].nombre}"` });
+      }
+      itemsVerificados.push({
+        producto_id: rows[0].id,
+        nombre_producto: rows[0].nombre,
+        precio_unitario: parseFloat(rows[0].precio),
+        cantidad: item.cantidad,
+        stock_actual: rows[0].stock,   // guardamos para el kardex sin 2ª consulta
+      });
+    }
+
+    const subtotal = itemsVerificados.reduce((sum, i) => sum + i.precio_unitario * i.cantidad, 0);
+
+    // Validar y aplicar cupón (dentro de la transacción para consistencia)
+    let descuento = 0;
+    let cuponAplicado = null;
+    if (cupon_codigo) {
+      const [[cupon]] = await conn.execute(
+        "SELECT * FROM cupones WHERE codigo = ? AND activo = 1",
+        [cupon_codigo.toUpperCase().trim()]
+      );
+      if (!cupon) { await conn.rollback(); return res.status(400).json({ error: "Cupón no válido o inactivo" }); }
+      const { valido, error } = _validarLogica(cupon, subtotal);
+      if (!valido) { await conn.rollback(); return res.status(400).json({ error }); }
+      descuento = _calcularDescuento(cupon, subtotal);
+      cuponAplicado = cupon;
+    }
+
+    const total = Math.max(0, subtotal - descuento);
+
     const [pedidoResult] = await conn.execute(
-      "INSERT INTO pedidos (usuario_id, total, nota, metodo_pago, codigo_verificacion) VALUES (?, ?, ?, ?, ?)",
-      [usuarioId, total.toFixed(2), nota || null, metodo_pago, codigo]
+      "INSERT INTO pedidos (usuario_id, total, nota, metodo_pago, codigo_verificacion, cupon_codigo, descuento) VALUES (?, ?, ?, ?, ?, ?, ?)",
+      [usuarioId, total.toFixed(2), nota || null, metodo_pago, codigo, cuponAplicado ? cuponAplicado.codigo : null, descuento.toFixed(2)]
     );
     const pedidoId = pedidoResult.insertId;
 
-    for (const item of items) {
+    for (const item of itemsVerificados) {
       await conn.execute(
         "INSERT INTO detalle_pedidos (pedido_id, producto_id, cantidad, precio_unitario, nombre_producto) VALUES (?, ?, ?, ?, ?)",
         [pedidoId, item.producto_id, item.cantidad, item.precio_unitario, item.nombre_producto]
       );
-      // Descontar stock
-      await conn.execute(
-        "UPDATE productos SET stock = stock - ? WHERE id = ?",
-        [item.cantidad, item.producto_id]
-      );
+      const stockNuevo = item.stock_actual - item.cantidad;
+      await conn.execute("UPDATE productos SET stock = stock - ? WHERE id = ?", [item.cantidad, item.producto_id]);
+      try {
+        await registrarMovimiento(conn, {
+          producto_id: item.producto_id, tipo: "pedido",
+          cantidad: -item.cantidad, stock_anterior: item.stock_actual, stock_nuevo: stockNuevo,
+          motivo: `Venta — Pedido #${pedidoId}`, pedido_id: pedidoId, usuario_id: usuarioId,
+        });
+      } catch (e) { console.warn("movimientos_inventario no disponible:", e.code); }
     }
 
     await conn.commit();
+
+    // Registrar uso del cupón (fuera de la transacción del pedido)
+    if (cuponAplicado) {
+      try {
+        await pool.execute(
+          "UPDATE cupones SET usos_totales = usos_totales + 1, usos_disponibles = IF(usos_disponibles IS NULL, NULL, usos_disponibles - 1) WHERE id = ?",
+          [cuponAplicado.id]
+        );
+      } catch (e) { console.warn("Error actualizando uso de cupón:", e.message); }
+    }
 
     const [pedido] = await conn.execute(
       "SELECT p.*, u.nombre as cliente_nombre, u.email as cliente_email FROM pedidos p JOIN usuarios u ON p.usuario_id = u.id WHERE p.id = ?",
@@ -116,9 +170,11 @@ export const createPedido = async (req, res) => {
 
     const pedidoCompleto = { ...pedido[0], items: detalle };
 
-    // Emails no bloqueantes
+    // Emails y notificaciones no bloqueantes
     enviarConfirmacionPedido(pedido[0].cliente_nombre, pedido[0].cliente_email, pedidoCompleto);
     enviarNotificacionAdmin(pedidoCompleto);
+    const { titulo, mensaje } = MENSAJES.pedido_nuevo(pedidoId, total);
+    crearNotificacion(usuarioId, "pedido_nuevo", titulo, mensaje, { pedido_id: pedidoId });
 
     res.status(201).json({
       success: true,
@@ -256,16 +312,24 @@ export const getPedidosPendientesCount = async (req, res) => {
   }
 };
 
-const restaurarStock = async (pedidoId) => {
+const restaurarStock = async (pedidoId, tipo = "cancelacion", usuarioId = null) => {
   const [items] = await pool.execute(
     "SELECT producto_id, cantidad FROM detalle_pedidos WHERE pedido_id = ?",
     [pedidoId]
   );
   for (const item of items) {
-    await pool.execute(
-      "UPDATE productos SET stock = stock + ? WHERE id = ?",
-      [item.cantidad, item.producto_id]
-    );
+    const [[prod]] = await pool.execute("SELECT stock FROM productos WHERE id = ?", [item.producto_id]);
+    const stockAnterior = prod?.stock ?? 0;
+    const stockNuevo = stockAnterior + item.cantidad;
+    await pool.execute("UPDATE productos SET stock = stock + ? WHERE id = ?", [item.cantidad, item.producto_id]);
+    try {
+      await pool.execute(
+        `INSERT INTO movimientos_inventario (producto_id, tipo, cantidad, stock_anterior, stock_nuevo, pedido_id, usuario_id, motivo)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+        [item.producto_id, tipo, item.cantidad, stockAnterior, stockNuevo, pedidoId, usuarioId,
+         `Stock restaurado por ${tipo === "cancelacion" ? "cancelación" : "devolución"} del pedido #${pedidoId}`]
+      );
+    } catch (e) { console.warn("movimientos_inventario no disponible:", e.code); }
   }
 };
 
@@ -289,16 +353,20 @@ export const cancelarPedidoCliente = async (req, res) => {
     }
 
     const pedido = pedidos[0];
-    const cancelables = ["pendiente", "procesando"];
+    const cancelables = ["pendiente", "confirmado", "preparando"];
 
     if (!cancelables.includes(pedido.estado)) {
-      const estadoLabel = { enviado: "En Camino", completado: "Entregado", cancelado: "ya cancelado" };
+      const estadoLabel = {
+        enviado: "En Camino", entregado: "Entregado", cancelado: "ya cancelado",
+        devuelto: "en proceso de devolución",
+        procesando: "En Preparación", completado: "Entregado", // backward compat
+      };
       return res.status(400).json({
-        error: `No puedes cancelar este pedido porque está ${estadoLabel[pedido.estado] || pedido.estado}. Solo se pueden cancelar pedidos Pendientes o En Preparación.`,
+        error: `No puedes cancelar este pedido porque está ${estadoLabel[pedido.estado] || pedido.estado}. Solo se pueden cancelar pedidos Pendientes, Confirmados o En Preparación.`,
       });
     }
 
-    await restaurarStock(id);
+    await restaurarStock(id, "cancelacion", usuario_id);
 
     await pool.execute(
       "UPDATE pedidos SET estado = 'cancelado', motivo_cancelacion = ? WHERE id = ?",
@@ -312,27 +380,58 @@ export const cancelarPedidoCliente = async (req, res) => {
   }
 };
 
+// SDI-68: Transiciones válidas de estado
+const TRANSICIONES = {
+  pendiente:  ["confirmado", "cancelado"],
+  confirmado: ["preparando", "cancelado"],
+  preparando: ["enviado",    "cancelado"],
+  enviado:    ["entregado",  "devuelto"],
+  entregado:  ["devuelto"],
+  cancelado:  [],
+  devuelto:   [],
+  // backward compat con estados legacy
+  procesando: ["enviado", "cancelado"],
+  completado: ["devuelto"],
+};
+
 export const updateEstadoPedido = async (req, res) => {
   try {
     const { id } = req.params;
     const { estado, motivo } = req.body;
-    const estadosValidos = ["pendiente", "procesando", "enviado", "completado", "cancelado"];
+    const ESTADOS_VALIDOS = ["pendiente", "confirmado", "preparando", "enviado", "entregado", "cancelado", "devuelto"];
 
-    if (!estadosValidos.includes(estado)) {
+    if (!ESTADOS_VALIDOS.includes(estado)) {
       return res.status(400).json({ error: "Estado no válido" });
     }
 
-    if (estado === "cancelado" && !motivo?.trim()) {
-      return res.status(400).json({ error: "Debes indicar un motivo para cancelar el pedido" });
+    if (["cancelado", "devuelto"].includes(estado) && !motivo?.trim()) {
+      const accion = estado === "cancelado" ? "cancelar" : "registrar devolución de";
+      return res.status(400).json({ error: `Debes indicar un motivo para ${accion} el pedido` });
     }
 
-    const [existing] = await pool.execute("SELECT estado FROM pedidos WHERE id = ?", [id]);
+    const [existing] = await pool.execute("SELECT estado, usuario_id FROM pedidos WHERE id = ?", [id]);
     if (existing.length === 0) return res.status(404).json({ error: "Pedido no encontrado" });
 
+    const estadoActual = existing[0].estado;
+    const pedidoUsuarioId = existing[0].usuario_id;
+    const permitidos = TRANSICIONES[estadoActual] ?? [];
+    if (!permitidos.includes(estado)) {
+      return res.status(400).json({
+        error: `No se puede pasar de "${estadoActual}" a "${estado}". Transiciones válidas: ${permitidos.join(", ") || "ninguna"}`,
+      });
+    }
+
+    const adminId = req.user?.id || null;
     if (estado === "cancelado") {
-      await restaurarStock(id);
+      await restaurarStock(id, "cancelacion", adminId);
       await pool.execute(
         "UPDATE pedidos SET estado = 'cancelado', motivo_cancelacion = ? WHERE id = ?",
+        [motivo.trim(), id]
+      );
+    } else if (estado === "devuelto") {
+      await restaurarStock(id, "devolucion", adminId);
+      await pool.execute(
+        "UPDATE pedidos SET estado = 'devuelto', motivo_cancelacion = ? WHERE id = ?",
         [motivo.trim(), id]
       );
     } else {
@@ -361,6 +460,20 @@ export const updateEstadoPedido = async (req, res) => {
       enviarCambioEstado(pedidoData[0].cliente_nombre, pedidoData[0].cliente_email, {
         id, estado, total: pedidoData[0].total, items,
       });
+    }
+
+    // Notificación al cliente (no bloqueante)
+    if (pedidoUsuarioId) {
+      const tipoMap = {
+        confirmado: "pedido_confirmado", preparando: "pedido_preparando",
+        enviado: "pedido_enviado", entregado: "pedido_entregado",
+        cancelado: "pedido_cancelado", devuelto: "pedido_devuelto",
+      };
+      const tipo = tipoMap[estado];
+      if (tipo && MENSAJES[tipo]) {
+        const { titulo, mensaje } = MENSAJES[tipo](id, motivo);
+        crearNotificacion(pedidoUsuarioId, tipo, titulo, mensaje, { pedido_id: parseInt(id) });
+      }
     }
 
     res.json({ success: true, message: `Pedido actualizado a "${estado}"` });

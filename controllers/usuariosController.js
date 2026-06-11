@@ -18,7 +18,7 @@ export const getMiPerfil = async (req, res) => {
 export const getAllUsuarios = async (req, res) => {
   try {
     const [rows] = await pool.execute(
-      "SELECT id, nombre, email, rol, creado_en FROM usuarios WHERE rol = 'cliente' ORDER BY creado_en DESC"
+      "SELECT id, nombre, email, rol, estado, creado_en FROM usuarios WHERE rol = 'cliente' ORDER BY creado_en DESC"
     );
     res.json({ success: true, data: rows });
   } catch (error) {
@@ -27,21 +27,52 @@ export const getAllUsuarios = async (req, res) => {
   }
 };
 
+// SDI-65: Soft delete — desactiva el usuario sin borrar su historial
 export const deleteUsuario = async (req, res) => {
   try {
     const { id } = req.params;
 
     const [rows] = await pool.execute("SELECT id, rol FROM usuarios WHERE id = ?", [id]);
     if (rows.length === 0) return res.status(404).json({ error: "Usuario no encontrado" });
-    if (rows[0].rol === "admin") return res.status(403).json({ error: "No se puede eliminar un administrador" });
+    if (rows[0].rol === "admin") return res.status(403).json({ error: "No se puede desactivar un administrador" });
 
-    // Eliminar pedidos primero (detalle_pedidos se borra en cascada)
-    await pool.execute("DELETE FROM pedidos WHERE usuario_id = ?", [id]);
-    await pool.execute("DELETE FROM usuarios WHERE id = ?", [id]);
+    await pool.execute(
+      "UPDATE usuarios SET estado = 'inactivo', actualizado_en = CURRENT_TIMESTAMP WHERE id = ?",
+      [id]
+    );
 
-    res.json({ success: true, message: "Usuario eliminado correctamente" });
+    res.json({ success: true, message: "Usuario desactivado correctamente" });
   } catch (error) {
-    console.error("Error eliminando usuario:", error);
+    console.error("Error desactivando usuario:", error);
+    res.status(500).json({ error: "Error del servidor" });
+  }
+};
+
+// SDI-65: Cambiar estado de usuario (activo/inactivo)
+export const patchEstadoUsuario = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { estado } = req.body;
+
+    if (!["activo", "inactivo"].includes(estado)) {
+      return res.status(400).json({ error: "Estado inválido. Use: activo, inactivo" });
+    }
+
+    const [rows] = await pool.execute("SELECT id, rol FROM usuarios WHERE id = ?", [id]);
+    if (rows.length === 0) return res.status(404).json({ error: "Usuario no encontrado" });
+    if (rows[0].rol === "admin") return res.status(403).json({ error: "No se puede modificar el estado de un administrador" });
+
+    await pool.execute(
+      "UPDATE usuarios SET estado = ?, actualizado_en = CURRENT_TIMESTAMP WHERE id = ?",
+      [estado, id]
+    );
+
+    res.json({
+      success: true,
+      message: `Usuario ${estado === "activo" ? "activado" : "desactivado"} correctamente`,
+    });
+  } catch (error) {
+    console.error("Error cambiando estado de usuario:", error);
     res.status(500).json({ error: "Error del servidor" });
   }
 };

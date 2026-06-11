@@ -1,26 +1,33 @@
 import mysql from "mysql2/promise";
 import dotenv from "dotenv";
+import { readFileSync } from "fs";
+import { fileURLToPath } from "url";
+import { dirname, join } from "path";
+
 dotenv.config();
-// Configuración de la conexión a MySQL
-const dbConfig = {
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
+
+const baseConfig = {
   host: process.env.DB_HOST,
-  port: 3306,
+  port: parseInt(process.env.DB_PORT || "3306"),
   user: process.env.DB_USER,
   password: process.env.DB_PASSWORD,
   database: process.env.DB_NAME,
-  waitForConnections: true,
-  connectionLimit: 10,
-  queueLimit: 0
+  ssl: process.env.DB_SSL === "true" ? { rejectUnauthorized: false } : undefined,
 };
 
-// Crear pool de conexiones
-const pool = mysql.createPool(dbConfig);
-// Probar conexión
+const pool = mysql.createPool({
+  ...baseConfig,
+  waitForConnections: true,
+  connectionLimit: 10,
+  queueLimit: 0,
+});
+
 export const testConnection = async () => {
   try {
     const connection = await pool.getConnection();
     console.log("✅ Conexión a MySQL establecida correctamente");
-    // Verificar que las tablas existen
     const [tables] = await connection.execute("SHOW TABLES");
     console.log(`📊 Tablas en la base de datos: ${tables.length}`);
     connection.release();
@@ -28,6 +35,37 @@ export const testConnection = async () => {
   } catch (error) {
     console.error("❌ Error conectando a MySQL:", error.message);
     return false;
+  }
+};
+
+// Corre bootstrap.sql solo si la BD está vacía (BD nueva en Railway u otro proveedor).
+// En BD existente con tablas ya migradas, se omite.
+export const runBootstrap = async () => {
+  const [[{ cnt }]] = await pool.execute(
+    `SELECT COUNT(*) AS cnt
+     FROM information_schema.tables
+     WHERE table_schema = DATABASE() AND table_name = 'notificaciones'`
+  );
+
+  if (cnt > 0) {
+    console.log("✅ BD ya inicializada, omitiendo bootstrap");
+    return;
+  }
+
+  console.log("🔧 BD vacía detectada — ejecutando bootstrap...");
+  const bootstrapPath = join(__dirname, "..", "bootstrap.sql");
+  const sql = readFileSync(bootstrapPath, "utf8");
+
+  // Conexión dedicada con multipleStatements (solo para este script controlado)
+  const conn = await mysql.createConnection({ ...baseConfig, multipleStatements: true });
+  try {
+    await conn.query(sql);
+    console.log("✅ Bootstrap de BD completado");
+  } catch (err) {
+    console.error("❌ Error en bootstrap de BD:", err.message);
+    throw err;
+  } finally {
+    await conn.end();
   }
 };
 

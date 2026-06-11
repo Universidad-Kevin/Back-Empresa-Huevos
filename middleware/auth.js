@@ -21,8 +21,24 @@ export const authenticateToken = async (req, res, next) => {
     next();
   } catch (error) {
     console.error("Error en authenticateToken:", error.message);
-    return res.status(403).json({ error: "Token inválido o expirado" });
+    return res.status(401).json({ error: "Token inválido o expirado" });
   }
+};
+
+export const requireAdmin = (req, res, next) => {
+  if (!req.user || req.user.rol !== "admin") {
+    return res.status(403).json({ error: "Acceso solo para administradores" });
+  }
+  next();
+};
+
+// Empleados pueden gestionar operaciones del día a día (productos, pedidos, inventario, pagos).
+// Solo admin puede gestionar usuarios, clientes, cupones, estadísticas, auditoría y configuración.
+export const requireAdminOrEmpleado = (req, res, next) => {
+  if (!req.user || !["admin", "empleado"].includes(req.user.rol)) {
+    return res.status(403).json({ error: "Acceso restringido al personal" });
+  }
+  next();
 };
 
 export const authenticateMayorista = async (req, res, next) => {
@@ -49,6 +65,6 @@ export const authenticateMayorista = async (req, res, next) => {
     next();
   } catch (error) {
     console.error("Error en authenticateMayorista:", error.message);
-    return res.status(403).json({ error: "Token inválido o expirado" });
+    return res.status(401).json({ error: "Token inválido o expirado" });
   }
 };

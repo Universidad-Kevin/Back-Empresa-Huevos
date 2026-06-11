@@ -94,35 +94,34 @@ export const getProductoById = async (req, res) => {
 export const createProducto = async (req, res) => {
   try {
     const {
-      nombre,
-      descripcion,
-      precio,
-      categoria,
-      imagen,
-      stock,
-      estado,
-      caracteristicas,
-      codigo,
-      unidad,
+      nombre, descripcion, precio, categoria, imagen, stock,
+      estado, caracteristicas, codigo, unidad, categoria_id, marca_id,
     } = req.body;
     console.log("Datos recibidos para crear producto:", req.body);
 
-    if (!nombre || !precio || !categoria) {
-      return res
-        .status(400)
-        .json({ error: "Nombre, precio y categoría son requeridos" });
+    let categoriaText = categoria || null;
+    let catId = categoria_id || null;
+    if (catId) {
+      const [cats] = await pool.query("SELECT nombre FROM categorias WHERE id = ?", [catId]);
+      if (cats.length > 0) categoriaText = cats[0].nombre;
+    }
+
+    if (!nombre || !precio || (!categoriaText && !catId)) {
+      return res.status(400).json({ error: "Nombre, precio y categoría son requeridos" });
     }
 
     const [result] = await pool.query(
       `INSERT INTO productos
-       (codigo, nombre, descripcion, precio, categoria, imagen, stock, unidad, estado, caracteristicas, creado_en)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())`,
+       (codigo, nombre, descripcion, precio, categoria, categoria_id, marca_id, imagen, stock, unidad, estado, caracteristicas, creado_en)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())`,
       [
         codigo || null,
         nombre,
         descripcion || null,
         precio,
-        categoria,
+        categoriaText,
+        catId,
+        marca_id || null,
         imagen || null,
         stock !== undefined ? stock : 0,
         unidad || 'unidad',
@@ -152,16 +151,8 @@ export const updateProducto = async (req, res) => {
   try {
     const { id } = req.params;
     const {
-      nombre,
-      descripcion,
-      precio,
-      categoria,
-      imagen,
-      stock,
-      estado,
-      caracteristicas,
-      codigo,
-      unidad,
+      nombre, descripcion, precio, categoria, imagen, stock,
+      estado, caracteristicas, codigo, unidad, categoria_id, marca_id,
     } = req.body;
 
     console.log("Actualizando producto ID:", id, "con datos:", req.body);
@@ -213,17 +204,28 @@ export const updateProducto = async (req, res) => {
       updateCaracteristicas = typeof caracteristicas === 'string' ? caracteristicas : JSON.stringify(caracteristicas);
     }
 
+    let updateCategoriaText = categoria !== undefined ? categoria : currentProduct.categoria;
+    let updateCategoriaId = categoria_id !== undefined ? (categoria_id || null) : currentProduct.categoria_id;
+    let updateMarcaId = marca_id !== undefined ? (marca_id || null) : currentProduct.marca_id;
+    if (updateCategoriaId) {
+      const [cats] = await pool.query("SELECT nombre FROM categorias WHERE id = ?", [updateCategoriaId]);
+      if (cats.length > 0) updateCategoriaText = cats[0].nombre;
+    }
+
     const [result] = await pool.query(
       `UPDATE productos
        SET codigo = ?, nombre = ?, descripcion = ?, precio = ?, categoria = ?,
-           imagen = ?, stock = ?, unidad = ?, estado = ?, caracteristicas = ?, actualizado_en = CURRENT_TIMESTAMP
+           categoria_id = ?, marca_id = ?, imagen = ?, stock = ?, unidad = ?,
+           estado = ?, caracteristicas = ?, actualizado_en = CURRENT_TIMESTAMP
        WHERE id = ?`,
       [
         updateCodigo,
         nombre,
         updateDescripcion,
         precio,
-        categoria,
+        updateCategoriaText,
+        updateCategoriaId,
+        updateMarcaId,
         updateImagen,
         updateStock,
         updateUnidad,
@@ -269,6 +271,61 @@ export const deleteProducto = async (req, res) => {
     res.json({ success: true, message: "Producto desactivado exitosamente" });
   } catch (error) {
     console.error("Error desactivando producto:", error);
+    res.status(500).json({ error: "Error del servidor" });
+  }
+};
+
+// SDI-64: Cambiar estado de producto (activo/inactivo)
+export const patchEstadoProducto = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { estado } = req.body;
+
+    if (!["activo", "inactivo"].includes(estado)) {
+      return res.status(400).json({ error: "Estado inválido. Use: activo, inactivo" });
+    }
+
+    const [result] = await pool.query(
+      "UPDATE productos SET estado = ?, actualizado_en = CURRENT_TIMESTAMP WHERE id = ?",
+      [estado, id]
+    );
+
+    if (result.affectedRows === 0) {
+      return res.status(404).json({ error: "Producto no encontrado" });
+    }
+
+    const [rows] = await pool.query("SELECT * FROM productos WHERE id = ?", [id]);
+    res.json({
+      success: true,
+      data: rows[0],
+      message: `Producto ${estado === "activo" ? "activado" : "desactivado"} exitosamente`,
+    });
+  } catch (error) {
+    console.error("Error cambiando estado de producto:", error);
+    res.status(500).json({ error: "Error del servidor" });
+  }
+};
+
+
+// POST /productos/:id/imagen — sube imagen y la guarda como base64 en la BD
+export const uploadImagenProducto = async (req, res) => {
+  const { id } = req.params;
+  if (!req.file) return res.status(400).json({ error: "No se recibió ningún archivo" });
+
+  try {
+    const [rows] = await pool.execute("SELECT id FROM productos WHERE id = ?", [id]);
+    if (rows.length === 0) return res.status(404).json({ error: "Producto no encontrado" });
+
+    const dataUrl = `data:${req.file.mimetype};base64,${req.file.buffer.toString("base64")}`;
+
+    await pool.execute(
+      "UPDATE productos SET imagen = ?, actualizado_en = CURRENT_TIMESTAMP WHERE id = ?",
+      [dataUrl, id]
+    );
+
+    res.json({ success: true, imagen: dataUrl });
+  } catch (e) {
+    console.error("uploadImagenProducto:", e);
     res.status(500).json({ error: "Error del servidor" });
   }
 };

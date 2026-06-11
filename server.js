@@ -2,7 +2,13 @@
 import express from "express";
 import cors from "cors";
 import dotenv from "dotenv";
-import { testConnection } from "./config/database.js";
+import { fileURLToPath } from "url";
+import { dirname, join } from "path";
+import { existsSync } from "fs";
+import { testConnection, runBootstrap } from "./config/database.js";
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
 
 // Rutas
 import authRoutes from "./routes/auth.js";
@@ -13,8 +19,30 @@ import pedidosRoutes from "./routes/pedidos.js";
 import usuariosRoutes from "./routes/usuarios.js";
 import carritoRoutes from "./routes/carrito.js";
 import mayoristaRoutes from "./routes/mayorista.js";
+import categoriasRoutes from "./routes/categorias.js";
+import marcasRoutes from "./routes/marcas.js";
+import inventarioRoutes from "./routes/inventario.js";
+import proveedoresRoutes from "./routes/proveedores.js";
+import pagosRoutes from "./routes/pagos.js";
+import facturasRoutes from "./routes/facturas.js";
+import cuponesRoutes from "./routes/cupones.js";
+import favoritosRoutes from "./routes/favoritos.js";
+import valoracionesRoutes from "./routes/valoraciones.js";
+import notificacionesRoutes from "./routes/notificaciones.js";
+import auditoriaRoutes from "./routes/auditoria.js";
+import { auditMiddleware } from "./middleware/auditoria.js";
+import { authenticateToken } from "./middleware/auth.js";
 
 dotenv.config();
+
+// Guardia de seguridad al arranque
+if (!process.env.JWT_SECRET || process.env.JWT_SECRET.length < 32) {
+  console.error("❌ FATAL: JWT_SECRET no configurado o es demasiado corto (< 32 chars). Configúralo en las variables de entorno antes de arrancar.");
+  process.exit(1);
+}
+if (process.env.NODE_ENV === "production" && !process.env.FRONTEND_URL) {
+  console.warn("⚠️  FRONTEND_URL no configurado en producción. CORS aceptará cualquier origen.");
+}
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -49,6 +77,8 @@ app.use((req, res, next) => {
   next();
 });
 
+app.use(auditMiddleware);
+
 // Rutas públicas
 app.get("/", (req, res) => {
   res.json({
@@ -74,6 +104,17 @@ app.use("/pedidos", pedidosRoutes);
 app.use("/usuarios", usuariosRoutes);
 app.use("/carrito", carritoRoutes);
 app.use("/mayorista", mayoristaRoutes);
+app.use("/categorias", categoriasRoutes);
+app.use("/marcas", marcasRoutes);
+app.use("/inventario", inventarioRoutes);
+app.use("/proveedores", proveedoresRoutes);
+app.use("/pagos", pagosRoutes);
+app.use("/facturas", facturasRoutes);
+app.use("/cupones", cuponesRoutes);
+app.use("/favoritos", favoritosRoutes);
+app.use("/valoraciones", valoracionesRoutes);
+app.use("/notificaciones", notificacionesRoutes);
+app.use("/auditoria", auditoriaRoutes);
 
 // Endpoint de health check
 app.get("/health", (req, res) => {
@@ -96,6 +137,80 @@ app.get("/info", (req, res) => {
       autor: "Kevin Tenorio",
     },
   });
+});
+
+// Estadísticas admin — protegidas
+app.get("/admin/estadisticas", authenticateToken, async (req, res) => {
+  if (req.user.rol !== "admin") return res.status(403).json({ error: "Solo admin" });
+  try {
+    const pool = await import("./config/database.js").then(m => m.default);
+
+    const [[ventasMes]] = await pool.execute(`
+      SELECT COALESCE(SUM(total),0) AS total, COUNT(*) AS pedidos
+      FROM pedidos
+      WHERE MONTH(creado_en)=MONTH(NOW()) AND YEAR(creado_en)=YEAR(NOW()) AND estado != 'cancelado'`);
+
+    const [[ventasAnterior]] = await pool.execute(`
+      SELECT COALESCE(SUM(total),0) AS total
+      FROM pedidos
+      WHERE MONTH(creado_en)=MONTH(DATE_SUB(NOW(),INTERVAL 1 MONTH))
+        AND YEAR(creado_en)=YEAR(DATE_SUB(NOW(),INTERVAL 1 MONTH))
+        AND estado != 'cancelado'`);
+
+    const [[clientesNuevos]] = await pool.execute(`
+      SELECT COUNT(*) AS total FROM usuarios
+      WHERE rol = 'cliente' AND creado_en >= DATE_SUB(NOW(), INTERVAL 30 DAY)`);
+
+    const [topProductos] = await pool.execute(`
+      SELECT p.nombre, SUM(dp.cantidad) AS unidades, SUM(dp.cantidad * dp.precio_unitario) AS ingresos
+      FROM detalle_pedidos dp
+      JOIN productos p ON dp.producto_id = p.id
+      JOIN pedidos pe ON dp.pedido_id = pe.id
+      WHERE pe.estado != 'cancelado'
+      GROUP BY p.id, p.nombre
+      ORDER BY unidades DESC LIMIT 5`);
+
+    const [tendencias] = await pool.execute(`
+      SELECT DATE_FORMAT(creado_en,'%Y-%m') AS mes,
+             DATE_FORMAT(creado_en,'%b') AS mes_corto,
+             SUM(total) AS total, COUNT(*) AS pedidos
+      FROM pedidos
+      WHERE creado_en >= DATE_SUB(NOW(), INTERVAL 6 MONTH) AND estado != 'cancelado'
+      GROUP BY mes, mes_corto ORDER BY mes`);
+
+    const [ventasDiarias] = await pool.execute(`
+      SELECT DATE(creado_en) AS dia,
+             SUM(total) AS total,
+             COUNT(*) AS pedidos
+      FROM pedidos
+      WHERE creado_en >= DATE_SUB(NOW(), INTERVAL 30 DAY) AND estado != 'cancelado'
+      GROUP BY dia ORDER BY dia`);
+
+    const [pedidosPorEstado] = await pool.execute(`
+      SELECT estado, COUNT(*) AS total FROM pedidos GROUP BY estado ORDER BY total DESC`);
+
+    const prev = parseFloat(ventasAnterior.total);
+    const curr = parseFloat(ventasMes.total);
+    const crecimiento = prev > 0 ? (((curr - prev) / prev) * 100).toFixed(1) : null;
+
+    res.json({
+      success: true,
+      data: {
+        ventas_mes: curr,
+        pedidos_mes: ventasMes.pedidos,
+        ventas_mes_anterior: prev,
+        crecimiento,
+        clientes_nuevos: clientesNuevos.total,
+        top_productos: topProductos,
+        tendencias,
+        ventas_diarias: ventasDiarias,
+        pedidos_por_estado: pedidosPorEstado,
+      },
+    });
+  } catch (e) {
+    console.error("Error estadísticas admin:", e);
+    res.status(500).json({ error: "Error del servidor" });
+  }
 });
 
 // Estadísticas simples
@@ -127,15 +242,25 @@ app.get("/stats", async (req, res) => {
   }
 });
 
-// Middleware 404 para rutas no encontradas
-app.use((req, res) => {
-  res.status(404).json({
-    success: false,
-    message: "Ruta no encontrada",
-    path: req.originalUrl,
-    method: req.method,
+// Frontend estático — solo en producción, cuando el build existe
+const publicDir = join(__dirname, "public");
+if (process.env.NODE_ENV === "production" && existsSync(publicDir)) {
+  app.use(express.static(publicDir));
+  // SPA fallback: cualquier ruta no-API devuelve index.html
+  app.get("*", (req, res) => {
+    res.sendFile(join(publicDir, "index.html"));
   });
-});
+} else {
+  // Middleware 404 para rutas no encontradas (solo en desarrollo)
+  app.use((req, res) => {
+    res.status(404).json({
+      success: false,
+      message: "Ruta no encontrada",
+      path: req.originalUrl,
+      method: req.method,
+    });
+  });
+}
 
 // Middleware global de errores
 app.use((error, req, res, next) => {
@@ -155,6 +280,8 @@ const startServer = async () => {
       console.error("❌ No se pudo conectar a la base de datos. Saliendo...");
       process.exit(1);
     }
+
+    await runBootstrap();
 
     app.listen(PORT, "0.0.0.0", () => {
       console.log(`🚀 Servidor corriendo en http://localhost:${PORT}`);

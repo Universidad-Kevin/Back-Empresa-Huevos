@@ -10,23 +10,22 @@ import {
   reactivarCliente,
   getAllClientes,
   asignarCredenciales,
+  patchEstadoCliente,
 } from "../controllers/clientesController.js";
-import { authenticateToken } from "../middleware/auth.js";
+import { authenticateToken, requireAdmin } from "../middleware/auth.js";
 
 const router = express.Router();
 
-// Rutas protegidas de listado
-router.get("/all", authenticateToken, getAllClientes);
-router.get("/activos", authenticateToken, getClientesActivos);
-router.get("/inactivos", authenticateToken, getClientesInactivos);
-router.get("/pendientes", authenticateToken, getClientesPendientes);
-
-// ✅ Rutas protegidas
-router.get("/:id", authenticateToken, getClienteById);
-router.post("/", authenticateToken, createCliente);
-router.put("/:id", authenticateToken, updateCliente);
-router.delete("/:id", authenticateToken, deleteCliente);
-router.put("/:id/reactivar", authenticateToken, reactivarCliente);
-router.post("/:id/credenciales", authenticateToken, asignarCredenciales);
+router.get("/all",              authenticateToken, requireAdmin, getAllClientes);
+router.get("/activos",          authenticateToken, requireAdmin, getClientesActivos);
+router.get("/inactivos",        authenticateToken, requireAdmin, getClientesInactivos);
+router.get("/pendientes",       authenticateToken, requireAdmin, getClientesPendientes);
+router.get("/:id",              authenticateToken, requireAdmin, getClienteById);
+router.post("/",                authenticateToken, requireAdmin, createCliente);
+router.put("/:id",              authenticateToken, requireAdmin, updateCliente);
+router.patch("/:id/estado",     authenticateToken, requireAdmin, patchEstadoCliente);
+router.delete("/:id",           authenticateToken, requireAdmin, deleteCliente);
+router.put("/:id/reactivar",    authenticateToken, requireAdmin, reactivarCliente);
+router.post("/:id/credenciales",authenticateToken, requireAdmin, asignarCredenciales);
 
 export default router;

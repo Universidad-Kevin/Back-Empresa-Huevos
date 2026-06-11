@@ -1,36 +1,34 @@
 import express from "express";
 import {
-  getProductos,
-  getProductoById,
-  createProducto,
-  updateProducto,
-  deleteProducto,
-  getAllProductos,
-  getProductosInactivos,
-  reactivarProducto,
+  getProductos, getProductoById, createProducto, updateProducto,
+  deleteProducto, getAllProductos, getProductosInactivos, reactivarProducto, patchEstadoProducto,
+  uploadImagenProducto,
 } from "../controllers/productosController.js";
-import { authenticateToken } from "../middleware/auth.js";
-import {
-  crearReporte,
-  getReportes,
-  marcarRevisado,
-} from "../controllers/reportesStockController.js";
+import { authenticateToken, requireAdmin, requireAdminOrEmpleado } from "../middleware/auth.js";
+import { crearReporte, getReportes, marcarRevisado } from "../controllers/reportesStockController.js";
+import { uploadImagen, handleUploadError } from "../middleware/upload.js";
 
 const router = express.Router();
 
-// Rutas estáticas antes de /:id para evitar conflictos
-router.get("/activos", getProductos);
-router.get("/all", getAllProductos);
+// Públicas
+router.get("/activos",  getProductos);
+router.get("/all",      getAllProductos);
 router.get("/inactivos", getProductosInactivos);
-router.get("/reportes-stock", authenticateToken, getReportes);
+router.get("/:id",      getProductoById);
 
-router.get("/:id", getProductoById);
+// Empleado o admin: gestión de productos e inventario
+router.post("/",                           authenticateToken, requireAdminOrEmpleado, createProducto);
+router.put("/:id",                         authenticateToken, requireAdminOrEmpleado, updateProducto);
+router.patch("/:id/estado",                authenticateToken, requireAdminOrEmpleado, patchEstadoProducto);
+router.put("/:id/reactivar",               authenticateToken, requireAdminOrEmpleado, reactivarProducto);
+router.post("/:id/reportar-stock",         authenticateToken, requireAdminOrEmpleado, crearReporte);
+router.get("/reportes-stock",              authenticateToken, requireAdminOrEmpleado, getReportes);
+router.put("/reportes-stock/:id/revisar",  authenticateToken, requireAdminOrEmpleado, marcarRevisado);
 
-router.post("/", authenticateToken, createProducto);
-router.put("/:id", authenticateToken, updateProducto);
-router.delete("/:id", authenticateToken, deleteProducto);
-router.put("/:id/reactivar", authenticateToken, reactivarProducto);
-router.post("/:id/reportar-stock", authenticateToken, crearReporte);
-router.put("/reportes-stock/:id/revisar", authenticateToken, marcarRevisado);
+// Subir imagen de producto
+router.post("/:id/imagen", authenticateToken, requireAdminOrEmpleado, uploadImagen, handleUploadError, uploadImagenProducto);
+
+// Solo admin: eliminar producto
+router.delete("/:id", authenticateToken, requireAdmin, deleteProducto);
 
 export default router;

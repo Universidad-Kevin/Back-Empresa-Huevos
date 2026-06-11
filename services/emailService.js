@@ -405,15 +405,108 @@ export const enviarBienvenidaMayorista = (contacto, empresa, email, passwordPlai
     `
   );
 
+export const enviarAlertaStockBajo = (producto) => {
+  const adminEmail = process.env.ADMIN_EMAIL || process.env.EMAIL_USER;
+  if (!adminEmail) return Promise.resolve();
+  return enviar(
+    adminEmail,
+    `⚠️ Stock bajo: ${producto.nombre} (${producto.stock} ${producto.unidad || "uds."})`,
+    `
+    <div style="font-family:sans-serif;max-width:600px;margin:auto;border:1px solid #ddd;border-radius:8px;overflow:hidden;">
+      <div style="background:#dc3545;padding:24px 32px;">
+        <h1 style="color:#fff;margin:0;">⚠️ Alerta de Stock Bajo</h1>
+        <p style="color:#f8d7da;margin:4px 0 0;">CampOrganic · Inventario</p>
+      </div>
+      <div style="padding:32px;background:#f9f9f9;">
+        <h2 style="color:#dc3545;margin-top:0;">El stock de un producto está por debajo del mínimo</h2>
+        <div style="background:#fff;border:2px solid #dc3545;border-radius:8px;padding:20px;margin:16px 0;">
+          <p style="margin:4px 0;font-size:18px;font-weight:bold;">${producto.nombre}</p>
+          ${producto.codigo ? `<p style="margin:4px 0;color:#666;font-size:13px;">SKU: ${producto.codigo}</p>` : ""}
+          <p style="margin:12px 0 4px;">Stock actual:
+            <strong style="color:#dc3545;font-size:20px;">${producto.stock}</strong> ${producto.unidad || "unidades"}
+          </p>
+          <p style="margin:4px 0;color:#666;">Mínimo configurado: ${producto.stock_minimo} ${producto.unidad || "unidades"}</p>
+        </div>
+        <p>Se recomienda realizar una entrada de inventario lo antes posible para evitar quiebres de stock.</p>
+        <div style="text-align:center;margin:28px 0;">
+          <a href="${process.env.FRONTEND_URL || "http://localhost:5173"}/admin/inventario"
+             style="background:#dc3545;color:#fff;padding:14px 28px;border-radius:8px;text-decoration:none;font-weight:bold;">
+            Gestionar Inventario
+          </a>
+        </div>
+      </div>
+      <div style="padding:16px 32px;background:#f0f0f0;text-align:center;font-size:12px;color:#999;">
+        CampOrganic · Esta alerta no se repetirá por las próximas 24 horas para el mismo producto
+      </div>
+    </div>
+    `
+  );
+};
+
+export const enviarFactura = async (nombre, email, factura, pdfBuffer) => {
+  if (!emailHabilitado()) {
+    console.log(`[Email deshabilitado] Factura ${factura.numero} para ${email}`);
+    return;
+  }
+  const tipoLabel = factura.tipo === 'factura' ? 'Factura' : 'Boleta de Venta';
+  try {
+    await transporter.sendMail({
+      from: FROM,
+      to: email,
+      subject: `${tipoLabel} ${factura.numero} — CampOrganic`,
+      html: `
+        <div style="font-family:sans-serif;max-width:600px;margin:auto;border:1px solid #ddd;border-radius:8px;overflow:hidden;">
+          <div style="background:#2D5A27;padding:24px 32px;">
+            <h1 style="color:#fff;margin:0;">🌿 CampOrganic</h1>
+            <p style="color:#c8e6c9;margin:4px 0 0;">Comprobante de pago</p>
+          </div>
+          <div style="padding:32px;background:#f9f9f9;">
+            <h2 style="color:#2D5A27;margin-top:0;">Hola, ${nombre}</h2>
+            <p>Adjuntamos tu <strong>${tipoLabel}</strong> por la compra realizada en CampOrganic.</p>
+            <div style="background:#fff;border:1px solid #ddd;border-radius:8px;padding:16px;margin:16px 0;">
+              <p style="margin:4px 0;"><strong>Número:</strong> ${factura.numero}</p>
+              <p style="margin:4px 0;"><strong>Total:</strong> S/.${parseFloat(factura.total).toFixed(2)}</p>
+              <p style="margin:4px 0;"><strong>Pedido #:</strong> ${factura.pedido_id}</p>
+            </div>
+            <p style="color:#666;font-size:13px;">El comprobante se adjunta en formato PDF. Consérvalo para cualquier consulta.</p>
+          </div>
+          <div style="padding:16px 32px;background:#f0f0f0;text-align:center;font-size:12px;color:#999;">
+            CampOrganic · ${process.env.EMAIL_USER || 'camporganic@gmail.com'}
+          </div>
+        </div>
+      `,
+      attachments: [
+        {
+          filename: `${factura.numero}.pdf`,
+          content: pdfBuffer,
+          contentType: 'application/pdf',
+        },
+      ],
+    });
+    console.log(`Factura ${factura.numero} enviada a ${email}`);
+  } catch (err) {
+    console.error(`Error enviando factura a ${email}:`, err.message);
+  }
+};
+
 export const enviarCambioEstado = (nombre, email, pedido) => {
   const mensajes = {
-    procesando: { titulo: "Tu pedido está en preparación", desc: "Estamos preparando tu pedido con cuidado.", icono: "📦" },
+    confirmado: { titulo: "Tu pedido fue confirmado", desc: "Tu pedido fue confirmado y pronto comenzaremos a prepararlo.", icono: "✓" },
+    preparando: { titulo: "Tu pedido está en preparación", desc: "Estamos preparando tu pedido con cuidado.", icono: "📦" },
     enviado:    { titulo: "Tu pedido está en camino", desc: "Tu pedido ya salió y llegará pronto.", icono: "🚚" },
-    completado: { titulo: "Pedido entregado", desc: "¡Esperamos que disfrutes tu compra!", icono: "✅" },
+    entregado:  { titulo: "Pedido entregado", desc: "¡Esperamos que disfrutes tu compra!", icono: "✅" },
     cancelado:  { titulo: "Pedido cancelado", desc: "Tu pedido fue cancelado. Contáctanos si tienes dudas.", icono: "❌" },
+    devuelto:   { titulo: "Devolución registrada", desc: "Tu devolución fue registrada. El stock fue restaurado.", icono: "↩️" },
+    // backward compat
+    procesando: { titulo: "Tu pedido está en preparación", desc: "Estamos preparando tu pedido con cuidado.", icono: "📦" },
+    completado: { titulo: "Pedido entregado", desc: "¡Esperamos que disfrutes tu compra!", icono: "✅" },
   };
 
-  const estadoDisplay = { pendiente: "Pendiente", procesando: "En Preparación", enviado: "En Camino", completado: "Entregado", cancelado: "Cancelado" };
+  const estadoDisplay = {
+    pendiente: "Pendiente", confirmado: "Confirmado", preparando: "En Preparación",
+    enviado: "En Camino", entregado: "Entregado", cancelado: "Cancelado", devuelto: "Devuelto",
+    procesando: "En Preparación", completado: "Entregado",
+  };
   const info = mensajes[pedido.estado] || { titulo: `Estado actualizado`, desc: "", icono: "📋" };
 
   const itemsHTML = (pedido.items || []).length > 0
@@ -478,4 +571,28 @@ export const enviarCambioEstado = (nombre, email, pedido) => {
     </div>
     `
   );
+};
+
+export const enviarResetPassword = (email, token) => {
+  const url = `${process.env.FRONTEND_URL || "http://localhost:5173"}/reset-password?token=${token}`;
+  enviar(email, "Restablecer contraseña — CampOrganic", `
+    <div style="font-family:Arial,sans-serif;max-width:560px;margin:0 auto;">
+      <div style="background:#2D5A27;padding:24px 32px;">
+        <h1 style="color:#fff;margin:0;font-size:22px;">Restablecer contraseña</h1>
+      </div>
+      <div style="padding:32px;background:#f9f9f9;">
+        <p>Recibimos una solicitud para restablecer la contraseña de tu cuenta.</p>
+        <p>El enlace expira en <strong>30 minutos</strong>. Si no solicitaste este cambio, ignora este mensaje.</p>
+        <div style="text-align:center;margin:32px 0;">
+          <a href="${url}" style="background:#2D5A27;color:#fff;padding:14px 28px;border-radius:8px;text-decoration:none;font-weight:bold;">
+            Restablecer contraseña
+          </a>
+        </div>
+        <p style="font-size:12px;color:#999;">O copia este enlace: <a href="${url}">${url}</a></p>
+      </div>
+      <div style="padding:16px 32px;background:#f0f0f0;text-align:center;font-size:12px;color:#999;">
+        CampOrganic · Si no solicitaste este cambio, ignora este email.
+      </div>
+    </div>
+  `);
 };
