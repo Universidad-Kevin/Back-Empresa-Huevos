@@ -33,7 +33,7 @@ import auditoriaRoutes from "./routes/auditoria.js";
 import { auditMiddleware } from "./middleware/auditoria.js";
 import { authenticateToken } from "./middleware/auth.js";
 
-dotenv.config();
+if (process.env.NODE_ENV !== "production") { dotenv.config(); }
 
 // Debug temporal — diagnóstico de variables de entorno en Railway
 console.log("=== RAILWAY ENV DIAGNOSTIC ===");
