@@ -35,18 +35,24 @@ import { authenticateToken } from "./middleware/auth.js";
 
 if (process.env.NODE_ENV !== "production") { dotenv.config(); }
 
-// Debug temporal — diagnóstico de variables de entorno en Railway
+// Debug — diagnóstico de variables de entorno en Railway
 console.log("=== RAILWAY ENV DIAGNOSTIC ===");
 console.log("JWT_SECRET:", process.env.JWT_SECRET ? `SET (${process.env.JWT_SECRET.length} chars)` : "MISSING");
 console.log("NODE_ENV:", process.env.NODE_ENV || "MISSING");
+console.log("PORT:", process.env.PORT || "MISSING (will use 3000)");
+// DB explicit overrides
 console.log("DB_HOST:", process.env.DB_HOST || "MISSING");
 console.log("DB_USER:", process.env.DB_USER ? "SET" : "MISSING");
 console.log("DB_NAME:", process.env.DB_NAME || "MISSING");
+// Railway reference variables (may not resolve cross-service)
 console.log("MYSQLHOST:", process.env.MYSQLHOST || "MISSING");
 console.log("MYSQLUSER:", process.env.MYSQLUSER ? "SET" : "MISSING");
 console.log("MYSQLDATABASE:", process.env.MYSQLDATABASE || "MISSING");
-console.log("PORT:", process.env.PORT || "MISSING (will use 3000)");
+// Railway internal networking — reliable fallback
+console.log("RAILWAY_PRIVATE_DOMAIN:", process.env.RAILWAY_PRIVATE_DOMAIN || "MISSING");
+console.log("MYSQL_ROOT_PASSWORD:", process.env.MYSQL_ROOT_PASSWORD ? `SET (${process.env.MYSQL_ROOT_PASSWORD.length} chars)` : "MISSING");
 console.log("==============================");
+
 
 // Guardia de seguridad al arranque
 if (!process.env.JWT_SECRET || process.env.JWT_SECRET.length < 32) {
