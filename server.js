@@ -35,6 +35,16 @@ import { authenticateToken } from "./middleware/auth.js";
 
 dotenv.config();
 
+// Debug temporal — diagnóstico de variables de entorno en Railway
+console.log("=== RAILWAY ENV DIAGNOSTIC ===");
+console.log("JWT_SECRET:", process.env.JWT_SECRET ? `SET (${process.env.JWT_SECRET.length} chars)` : "MISSING");
+console.log("NODE_ENV:", process.env.NODE_ENV || "MISSING");
+console.log("DB_HOST:", process.env.DB_HOST || "MISSING");
+console.log("DB_USER:", process.env.DB_USER ? "SET" : "MISSING");
+console.log("DB_NAME:", process.env.DB_NAME || "MISSING");
+console.log("PORT:", process.env.PORT || "MISSING (will use 3000)");
+console.log("==============================");
+
 // Guardia de seguridad al arranque
 if (!process.env.JWT_SECRET || process.env.JWT_SECRET.length < 32) {
   console.error("❌ FATAL: JWT_SECRET no configurado o es demasiado corto (< 32 chars). Configúralo en las variables de entorno antes de arrancar.");
