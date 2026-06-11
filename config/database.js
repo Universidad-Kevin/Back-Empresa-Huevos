@@ -5,7 +5,9 @@ import { dirname, join } from "path";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
-// Soporta tanto los nombres locales (DB_HOST) como los del plugin MySQL de Railway (MYSQLHOST)
+const connectionUrl = process.env.MYSQL_URL || process.env.DATABASE_URL;
+
+// Config individual — usado como fallback y para el bootstrap (multipleStatements)
 const baseConfig = {
   host: process.env.DB_HOST || process.env.MYSQLHOST,
   port: parseInt(process.env.DB_PORT || process.env.MYSQLPORT || "3306"),
@@ -15,12 +17,11 @@ const baseConfig = {
   ssl: process.env.DB_SSL === "true" ? { rejectUnauthorized: false } : undefined,
 };
 
-const pool = mysql.createPool({
-  ...baseConfig,
-  waitForConnections: true,
-  connectionLimit: 10,
-  queueLimit: 0,
-});
+const poolConfig = connectionUrl
+  ? { uri: connectionUrl, ssl: { rejectUnauthorized: false }, waitForConnections: true, connectionLimit: 10, queueLimit: 0 }
+  : { ...baseConfig, waitForConnections: true, connectionLimit: 10, queueLimit: 0 };
+
+const pool = mysql.createPool(poolConfig);
 
 export const testConnection = async () => {
   try {
@@ -55,7 +56,10 @@ export const runBootstrap = async () => {
   const sql = readFileSync(bootstrapPath, "utf8");
 
   // Conexión dedicada con multipleStatements (solo para este script controlado)
-  const conn = await mysql.createConnection({ ...baseConfig, multipleStatements: true });
+  const connConfig = connectionUrl
+    ? { uri: connectionUrl, ssl: { rejectUnauthorized: false }, multipleStatements: true }
+    : { ...baseConfig, multipleStatements: true };
+  const conn = await mysql.createConnection(connConfig);
   try {
     await conn.query(sql);
     console.log("✅ Bootstrap de BD completado");

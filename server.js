@@ -39,12 +39,12 @@ if (process.env.NODE_ENV !== "production") { dotenv.config(); }
 console.log("=== RAILWAY ENV DIAGNOSTIC ===");
 console.log("JWT_SECRET:", process.env.JWT_SECRET ? `SET (${process.env.JWT_SECRET.length} chars)` : "MISSING");
 console.log("NODE_ENV:", process.env.NODE_ENV || "MISSING");
+console.log("MYSQL_URL:", process.env.MYSQL_URL ? "SET" : "MISSING");
+console.log("DATABASE_URL:", process.env.DATABASE_URL ? "SET" : "MISSING");
 console.log("DB_HOST:", process.env.DB_HOST || "MISSING");
 console.log("DB_USER:", process.env.DB_USER ? "SET" : "MISSING");
 console.log("DB_NAME:", process.env.DB_NAME || "MISSING");
 console.log("MYSQLHOST:", process.env.MYSQLHOST || "MISSING");
-console.log("MYSQLUSER:", process.env.MYSQLUSER ? "SET" : "MISSING");
-console.log("MYSQLDATABASE:", process.env.MYSQLDATABASE || "MISSING");
 console.log("PORT:", process.env.PORT || "MISSING (will use 3000)");
 console.log("==============================");
 
