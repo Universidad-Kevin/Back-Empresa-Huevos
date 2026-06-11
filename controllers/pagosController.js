@@ -2,23 +2,6 @@ import pool from "../config/database.js";
 import { crearNotificacion, MENSAJES } from "../services/notificacionesService.js";
 import { crearCargo } from "../services/culqiService.js";
 
-const crearTabla = async () => {
-  await pool.execute(`
-    CREATE TABLE IF NOT EXISTS pagos (
-      id INT AUTO_INCREMENT PRIMARY KEY,
-      pedido_id INT NOT NULL,
-      metodo ENUM('efectivo','yape','plin','transferencia','tarjeta') NOT NULL,
-      estado ENUM('pendiente','verificado','rechazado','reembolsado') NOT NULL DEFAULT 'pendiente',
-      monto DECIMAL(10,2) NOT NULL,
-      voucher MEDIUMTEXT NULL,
-      notas_admin TEXT NULL,
-      creado_en TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-      actualizado_en TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-      FOREIGN KEY (pedido_id) REFERENCES pedidos(id) ON DELETE CASCADE
-    )
-  `);
-};
-crearTabla().catch((e) => console.error("Error creando tabla pagos:", e));
 
 // POST /pagos — Cliente registra/actualiza comprobante
 export const registrarPago = async (req, res) => {

@@ -42,6 +42,9 @@ console.log("NODE_ENV:", process.env.NODE_ENV || "MISSING");
 console.log("DB_HOST:", process.env.DB_HOST || "MISSING");
 console.log("DB_USER:", process.env.DB_USER ? "SET" : "MISSING");
 console.log("DB_NAME:", process.env.DB_NAME || "MISSING");
+console.log("MYSQLHOST:", process.env.MYSQLHOST || "MISSING");
+console.log("MYSQLUSER:", process.env.MYSQLUSER ? "SET" : "MISSING");
+console.log("MYSQLDATABASE:", process.env.MYSQLDATABASE || "MISSING");
 console.log("PORT:", process.env.PORT || "MISSING (will use 3000)");
 console.log("==============================");
 

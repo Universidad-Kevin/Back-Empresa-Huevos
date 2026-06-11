@@ -5,12 +5,13 @@ import { dirname, join } from "path";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
+// Soporta tanto los nombres locales (DB_HOST) como los del plugin MySQL de Railway (MYSQLHOST)
 const baseConfig = {
-  host: process.env.DB_HOST,
-  port: parseInt(process.env.DB_PORT || "3306"),
-  user: process.env.DB_USER,
-  password: process.env.DB_PASSWORD,
-  database: process.env.DB_NAME,
+  host: process.env.DB_HOST || process.env.MYSQLHOST,
+  port: parseInt(process.env.DB_PORT || process.env.MYSQLPORT || "3306"),
+  user: process.env.DB_USER || process.env.MYSQLUSER,
+  password: process.env.DB_PASSWORD || process.env.MYSQLPASSWORD,
+  database: process.env.DB_NAME || process.env.MYSQLDATABASE,
   ssl: process.env.DB_SSL === "true" ? { rejectUnauthorized: false } : undefined,
 };
 

@@ -13,38 +13,6 @@ const generarCodigo = () => {
   return code.slice(0, 4) + "-" + code.slice(4);
 };
 
-const crearTablas = async () => {
-  await pool.execute(`
-    CREATE TABLE IF NOT EXISTS pedidos (
-      id INT AUTO_INCREMENT PRIMARY KEY,
-      usuario_id INT NOT NULL,
-      estado ENUM('pendiente','confirmado','preparando','enviado','entregado','cancelado','devuelto') DEFAULT 'pendiente',
-      metodo_pago ENUM('efectivo','yape','plin','transferencia','tarjeta') NOT NULL DEFAULT 'efectivo',
-      estado_pago ENUM('pendiente','pagado') NOT NULL DEFAULT 'pendiente',
-      total DECIMAL(10,2) NOT NULL,
-      nota TEXT,
-      codigo_verificacion VARCHAR(20) UNIQUE,
-      motivo_cancelacion TEXT,
-      creado_en TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-      actualizado_en TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-      FOREIGN KEY (usuario_id) REFERENCES usuarios(id)
-    )
-  `);
-  await pool.execute(`
-    CREATE TABLE IF NOT EXISTS detalle_pedidos (
-      id INT AUTO_INCREMENT PRIMARY KEY,
-      pedido_id INT NOT NULL,
-      producto_id INT NOT NULL,
-      cantidad INT NOT NULL,
-      precio_unitario DECIMAL(10,2) NOT NULL,
-      nombre_producto VARCHAR(255) NOT NULL,
-      FOREIGN KEY (pedido_id) REFERENCES pedidos(id) ON DELETE CASCADE,
-      FOREIGN KEY (producto_id) REFERENCES productos(id)
-    )
-  `);
-};
-
-crearTablas().catch((e) => console.error("Error creando tablas de pedidos:", e));
 
 export const createPedido = async (req, res) => {
   const conn = await pool.getConnection();
