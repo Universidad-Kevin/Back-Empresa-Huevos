@@ -142,12 +142,16 @@ export const forgotPassword = async (req, res) => {
   if (!email) return res.status(400).json({ error: "Email requerido" });
 
   try {
-    // Siempre responde 200 para no revelar si el email existe
     const [users] = await pool.execute(
       "SELECT id FROM usuarios WHERE email = ? AND activo = TRUE",
       [email]
     );
-    if (users.length > 0) {
+    const [clientes] = await pool.execute(
+      "SELECT id FROM clientes WHERE email = ? AND password IS NOT NULL AND estado = 'activo'",
+      [email]
+    );
+
+    if (users.length > 0 || clientes.length > 0) {
       const token = crypto.randomBytes(32).toString("hex");
       const expira = new Date(Date.now() + 30 * 60 * 1000); // 30 min
 
@@ -181,6 +185,7 @@ export const resetPassword = async (req, res) => {
     const hash = await bcrypt.hash(password, 10);
 
     await pool.execute("UPDATE usuarios SET password = ? WHERE email = ?", [hash, email]);
+    await pool.execute("UPDATE clientes SET password = ? WHERE email = ?", [hash, email]);
     await pool.execute("UPDATE password_resets SET usado = 1 WHERE token = ?", [token]);
 
     res.json({ success: true, message: "Contraseña actualizada correctamente" });
