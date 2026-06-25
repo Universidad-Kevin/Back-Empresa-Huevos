@@ -184,8 +184,14 @@ export const resetPassword = async (req, res) => {
     const { email } = rows[0];
     const hash = await bcrypt.hash(password, 10);
 
-    await pool.execute("UPDATE usuarios SET password = ? WHERE email = ?", [hash, email]);
-    await pool.execute("UPDATE clientes SET password = ? WHERE email = ?", [hash, email]);
+    await pool.execute(
+      "UPDATE usuarios SET password = ?, password_changed_at = NOW() WHERE email = ?",
+      [hash, email]
+    );
+    await pool.execute(
+      "UPDATE clientes SET password = ?, password_changed_at = NOW() WHERE email = ?",
+      [hash, email]
+    );
     await pool.execute("UPDATE password_resets SET usado = 1 WHERE token = ?", [token]);
 
     res.json({ success: true, message: "Contraseña actualizada correctamente" });

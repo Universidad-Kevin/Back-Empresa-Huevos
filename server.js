@@ -1,6 +1,7 @@
 // server.js
 import express from "express";
 import cors from "cors";
+import helmet from "helmet";
 import dotenv from "dotenv";
 import { fileURLToPath } from "url";
 import { dirname, join } from "path";
@@ -48,6 +49,12 @@ if (process.env.NODE_ENV === "production" && !process.env.FRONTEND_URL) {
 const app = express();
 const PORT = process.env.PORT || 3000;
 
+// Cabeceras de seguridad HTTP
+app.use(helmet({
+  crossOriginResourcePolicy: { policy: "cross-origin" }, // permite imágenes de URLs externas
+  contentSecurityPolicy: false, // El frontend es SPA servido por separado; CSP se configura allí
+}));
+
 // ⚡ Middleware CORS - Desarrollo local
 if (process.env.NODE_ENV !== "production") {
   app.use(cors({ origin: "*", credentials: true }));
@@ -68,9 +75,9 @@ if (process.env.NODE_ENV !== "production") {
   );
 }
 
-// Middleware para parsear JSON y URL-encoded
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+// Parseo de body — 10 MB para permitir imágenes base64 en actualizaciones de productos
+app.use(express.json({ limit: "10mb" }));
+app.use(express.urlencoded({ extended: true, limit: "10mb" }));
 
 // Middleware de logging simple
 app.use((req, res, next) => {
@@ -84,14 +91,7 @@ app.use(auditMiddleware);
 app.get("/", (req, res) => {
   res.json({
     success: true,
-    message: "API de Huevos Orgánicos - Backend funcionando 🥚",
-    version: "1.0.0",
-    endpoints: {
-      auth: "/auth",
-      productos: "/productos",
-      clientes: "/clientes",
-      health: "/health",
-    },
+    message: "API de Huevos Orgánicos - Backend funcionando",
   });
 });
 
@@ -127,23 +127,29 @@ app.get("/health", (req, res) => {
   });
 });
 
-// Info de la API
+// Info de la API — sin versión expuesta públicamente
 app.get("/info", (req, res) => {
   res.json({
     success: true,
     data: {
       nombre: "API Huevos Orgánicos",
-      version: "1.0.0",
       descripcion: "Backend para el sistema de gestión de huevos orgánicos",
-      autor: "Kevin Tenorio",
     },
   });
 });
+
+// SDI-282: cache de 5 minutos para estadísticas — evita 6 queries por cada recarga del dashboard
+const _statsCache = { data: null, ts: 0, TTL: 5 * 60 * 1000 };
 
 // Estadísticas admin — protegidas
 app.get("/admin/estadisticas", authenticateToken, async (req, res) => {
   if (req.user.rol !== "admin") return res.status(403).json({ error: "Solo admin" });
   try {
+    const now = Date.now();
+    if (_statsCache.data && now - _statsCache.ts < _statsCache.TTL) {
+      return res.json({ success: true, data: _statsCache.data, cached: true });
+    }
+
     const pool = await import("./config/database.js").then(m => m.default);
 
     const [[ventasMes]] = await pool.execute(`
@@ -194,20 +200,22 @@ app.get("/admin/estadisticas", authenticateToken, async (req, res) => {
     const curr = parseFloat(ventasMes.total);
     const crecimiento = prev > 0 ? (((curr - prev) / prev) * 100).toFixed(1) : null;
 
-    res.json({
-      success: true,
-      data: {
-        ventas_mes: curr,
-        pedidos_mes: ventasMes.pedidos,
-        ventas_mes_anterior: prev,
-        crecimiento,
-        clientes_nuevos: clientesNuevos.total,
-        top_productos: topProductos,
-        tendencias,
-        ventas_diarias: ventasDiarias,
-        pedidos_por_estado: pedidosPorEstado,
-      },
-    });
+    const payload = {
+      ventas_mes: curr,
+      pedidos_mes: ventasMes.pedidos,
+      ventas_mes_anterior: prev,
+      crecimiento,
+      clientes_nuevos: clientesNuevos.total,
+      top_productos: topProductos,
+      tendencias,
+      ventas_diarias: ventasDiarias,
+      pedidos_por_estado: pedidosPorEstado,
+    };
+
+    _statsCache.data = payload;
+    _statsCache.ts   = now;
+
+    res.json({ success: true, data: payload, cached: false });
   } catch (e) {
     console.error("Error estadísticas admin:", e);
     res.status(500).json({ error: "Error del servidor" });

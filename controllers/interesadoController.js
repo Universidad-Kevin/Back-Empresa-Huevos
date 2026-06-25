@@ -37,7 +37,6 @@ export const createInteresado = async (req, res) => {
       asunto,
       mensaje,
     } = req.body;
-    console.log("Datos recibidos para crear Interesado:", req.body);
 
     if (!nombre || !email || !asunto || !mensaje) {
       return res

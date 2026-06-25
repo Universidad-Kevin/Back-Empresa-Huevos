@@ -117,6 +117,8 @@ export const enviarBienvenida = (nombre, email) =>
 export const enviarConfirmacionPedido = (nombre, email, pedido) => {
   const metodoPagoLabel = {
     efectivo: "💵 Pago contra entrega",
+    yape: "📱 Yape",
+    plin: "💜 Plin",
     transferencia: "🏦 Transferencia bancaria",
     tarjeta: "💳 Tarjeta de crédito/débito",
   };
@@ -196,6 +198,17 @@ export const enviarConfirmacionPedido = (nombre, email, pedido) => {
         </table>
       </div>
 
+      <!-- Dirección de entrega -->
+      ${pedido.dir_calle ? `
+      <div style="padding:0 32px 16px;">
+        <div style="background:#fff8e1;border:1px solid #ffe082;border-radius:6px;padding:16px;">
+          <p style="margin:0 0 4px;font-size:13px;color:#666;">📍 DIRECCIÓN DE ENTREGA</p>
+          <p style="margin:2px 0;font-weight:bold;">${pedido.dir_calle}</p>
+          <p style="margin:2px 0;">Distrito: ${pedido.dir_distrito || '—'}</p>
+          ${pedido.dir_referencia ? `<p style="margin:2px 0;color:#666;font-size:13px;">Referencia: ${pedido.dir_referencia}</p>` : ''}
+        </div>
+      </div>` : ''}
+
       <!-- Info de pago -->
       <div style="padding:0 32px 24px;">
         <div style="background:#f9f9f9;border:1px solid #eee;border-radius:6px;padding:16px;">
@@ -243,6 +256,8 @@ export const enviarNotificacionAdmin = (pedido) => {
 
   const metodoPagoLabel = {
     efectivo: "💵 Pago contra entrega",
+    yape: "📱 Yape",
+    plin: "💜 Plin",
     transferencia: "🏦 Transferencia bancaria",
     tarjeta: "💳 Tarjeta de crédito/débito",
   };
@@ -276,6 +291,7 @@ export const enviarNotificacionAdmin = (pedido) => {
           <p style="margin:4px 0;"><strong>Total:</strong> S/.${parseFloat(pedido.total).toFixed(2)}</p>
           <p style="margin:4px 0;"><strong>Método de pago:</strong> ${metodoPagoLabel[pedido.metodo_pago] || pedido.metodo_pago}</p>
           <p style="margin:4px 0;"><strong>Estado:</strong> Pendiente</p>
+          ${pedido.dir_calle ? `<p style="margin:8px 0 4px;"><strong>📍 Entrega en:</strong> ${pedido.dir_calle}, ${pedido.dir_distrito}${pedido.dir_referencia ? ` (${pedido.dir_referencia})` : ''}</p>` : ''}
         </div>
 
         <table style="width:100%;border-collapse:collapse;margin:16px 0;">

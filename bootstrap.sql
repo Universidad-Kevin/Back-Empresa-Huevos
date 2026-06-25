@@ -96,6 +96,18 @@ CREATE TABLE IF NOT EXISTS cupones (
   creado_en        TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
+CREATE TABLE IF NOT EXISTS cupon_usos (
+  id         INT AUTO_INCREMENT PRIMARY KEY,
+  cupon_id   INT NOT NULL,
+  usuario_id INT NOT NULL,
+  pedido_id  INT NOT NULL,
+  usado_en   TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE KEY uq_cupon_usuario (cupon_id, usuario_id),
+  CONSTRAINT fk_cu_cupon   FOREIGN KEY (cupon_id)   REFERENCES cupones(id)  ON DELETE CASCADE,
+  CONSTRAINT fk_cu_usuario FOREIGN KEY (usuario_id) REFERENCES usuarios(id) ON DELETE CASCADE,
+  CONSTRAINT fk_cu_pedido  FOREIGN KEY (pedido_id)  REFERENCES pedidos(id)  ON DELETE CASCADE
+);
+
 -- -------------------------------------------------------------
 -- PRODUCTOS (depende de categorias y marcas)
 -- -------------------------------------------------------------
@@ -127,11 +139,15 @@ CREATE TABLE IF NOT EXISTS productos (
 CREATE TABLE IF NOT EXISTS pedidos (
   id                   INT AUTO_INCREMENT PRIMARY KEY,
   usuario_id           INT NOT NULL,
+  cliente_id           INT NULL,
   estado               ENUM('pendiente','confirmado','preparando','enviado','entregado','cancelado','devuelto') NOT NULL DEFAULT 'pendiente',
   metodo_pago          ENUM('efectivo','yape','plin','transferencia','tarjeta') NOT NULL DEFAULT 'efectivo',
   estado_pago          ENUM('pendiente','pagado') NOT NULL DEFAULT 'pendiente',
   total                DECIMAL(10,2) NOT NULL,
   nota                 TEXT,
+  dir_calle            VARCHAR(200) NULL,
+  dir_distrito         VARCHAR(100) NULL,
+  dir_referencia       VARCHAR(200) NULL,
   codigo_verificacion  VARCHAR(20) UNIQUE,
   motivo_cancelacion   TEXT,
   cupon_codigo         VARCHAR(50) NULL,

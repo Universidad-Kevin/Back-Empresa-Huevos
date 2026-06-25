@@ -1,17 +1,19 @@
 // Rate limiter en memoria — funciona para despliegue de instancia única (Railway).
 // Para múltiples réplicas se necesitaría Redis.
-
-const buckets = new Map(); // ip -> { count, resetAt }
-
-const cleaner = setInterval(() => {
-  const now = Date.now();
-  for (const [ip, b] of buckets) {
-    if (now > b.resetAt) buckets.delete(ip);
-  }
-}, 60_000);
-if (cleaner.unref) cleaner.unref();
+// Cada llamada a makeLimit tiene su propio Map privado — los contadores
+// de login y registro son completamente independientes.
 
 function makeLimit(maxRequests, windowMs, message) {
+  const buckets = new Map(); // ip -> { count, resetAt } — closure privado
+
+  const cleaner = setInterval(() => {
+    const now = Date.now();
+    for (const [ip, b] of buckets) {
+      if (now > b.resetAt) buckets.delete(ip);
+    }
+  }, 60_000);
+  if (cleaner.unref) cleaner.unref();
+
   return (req, res, next) => {
     const ip = req.ip || req.socket?.remoteAddress || "unknown";
     const now = Date.now();

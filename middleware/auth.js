@@ -11,13 +11,22 @@ export const authenticateToken = async (req, res, next) => {
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
 
     const [users] = await pool.execute(
-      "SELECT id, nombre, email, rol FROM usuarios WHERE id = ? AND activo = TRUE",
+      "SELECT id, nombre, email, rol, password_changed_at FROM usuarios WHERE id = ? AND activo = TRUE",
       [decoded.userId]
     );
 
     if (users.length === 0) return res.status(401).json({ error: "Usuario no válido o inactivo" });
 
-    req.user = users[0];
+    // Invalidar token si la contraseña fue cambiada después de que se emitió
+    const u = users[0];
+    if (u.password_changed_at) {
+      const changedAt = Math.floor(new Date(u.password_changed_at).getTime() / 1000);
+      if (decoded.iat < changedAt) {
+        return res.status(401).json({ error: "Sesión expirada. Por favor inicia sesión de nuevo." });
+      }
+    }
+
+    req.user = u;
     next();
   } catch (error) {
     console.error("Error en authenticateToken:", error.message);
