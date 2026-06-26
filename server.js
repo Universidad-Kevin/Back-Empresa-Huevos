@@ -1,8 +1,8 @@
 // server.js
+import "dotenv/config";
 import express from "express";
 import cors from "cors";
 import helmet from "helmet";
-import dotenv from "dotenv";
 import { fileURLToPath } from "url";
 import { dirname, join } from "path";
 import { existsSync } from "fs";
@@ -34,7 +34,6 @@ import auditoriaRoutes from "./routes/auditoria.js";
 import { auditMiddleware } from "./middleware/auditoria.js";
 import { authenticateToken } from "./middleware/auth.js";
 
-if (process.env.NODE_ENV !== "production") { dotenv.config(); }
 
 
 // Guardia de seguridad al arranque
