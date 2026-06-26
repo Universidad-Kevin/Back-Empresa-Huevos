@@ -8,6 +8,7 @@ services:
     environment:
       - NODE_ENV=${NODE_ENV:-development}
       - DB_HOST=db
+      - DB_PORT=3306
       - DB_USER=huevos_user
       - DB_PASSWORD=huevos_password
       - DB_NAME=huevos_organicos
