@@ -114,6 +114,7 @@ CREATE TABLE IF NOT EXISTS cupon_usos (
 
 CREATE TABLE IF NOT EXISTS productos (
   id                     INT AUTO_INCREMENT PRIMARY KEY,
+  codigo                 VARCHAR(50) NULL UNIQUE,
   nombre                 VARCHAR(255) NOT NULL,
   descripcion            TEXT,
   precio                 DECIMAL(10,2) NOT NULL,
@@ -122,6 +123,7 @@ CREATE TABLE IF NOT EXISTS productos (
   marca_id               INT,
   imagen                 MEDIUMTEXT,
   stock                  INT DEFAULT 0,
+  unidad                 VARCHAR(50) NOT NULL DEFAULT 'unidad',
   stock_minimo           INT NOT NULL DEFAULT 5,
   ultima_alerta_stock_en TIMESTAMP NULL,
   estado                 ENUM('activo','inactivo') DEFAULT 'activo',
