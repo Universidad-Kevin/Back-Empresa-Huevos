@@ -1,4 +1,5 @@
 import pool from "../config/database.js";
+import { uploadBuffer } from "../config/cloudinary.js";
 
 // Obtener productos activos con paginación, búsqueda y filtro por categoría (SDI-264, SDI-278)
 export const getProductos = async (req, res) => {
@@ -346,7 +347,7 @@ export const patchEstadoProducto = async (req, res) => {
 };
 
 
-// POST /productos/:id/imagen — sube imagen y la guarda como base64 en la BD
+// POST /productos/:id/imagen — sube imagen a Cloudinary y guarda la URL en la BD
 export const uploadImagenProducto = async (req, res) => {
   const { id } = req.params;
   if (!req.file) return res.status(400).json({ error: "No se recibió ningún archivo" });
@@ -355,16 +356,19 @@ export const uploadImagenProducto = async (req, res) => {
     const [rows] = await pool.execute("SELECT id FROM productos WHERE id = ?", [id]);
     if (rows.length === 0) return res.status(404).json({ error: "Producto no encontrado" });
 
-    const dataUrl = `data:${req.file.mimetype};base64,${req.file.buffer.toString("base64")}`;
+    const result = await uploadBuffer(req.file.buffer, {
+      public_id: `producto-${id}`,
+      overwrite: true,
+    });
 
     await pool.execute(
       "UPDATE productos SET imagen = ?, actualizado_en = CURRENT_TIMESTAMP WHERE id = ?",
-      [dataUrl, id]
+      [result.secure_url, id]
     );
 
-    res.json({ success: true, imagen: dataUrl });
+    res.json({ success: true, imagen: result.secure_url });
   } catch (e) {
     console.error("uploadImagenProducto:", e);
-    res.status(500).json({ error: "Error del servidor" });
+    res.status(500).json({ error: "Error al subir imagen" });
   }
 };
