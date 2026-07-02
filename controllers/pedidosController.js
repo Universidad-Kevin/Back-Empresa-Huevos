@@ -227,7 +227,7 @@ export const getMisPedidos = async (req, res) => {
       [usuarioId]
     );
 
-    const [rows] = await pool.execute(
+    const [rows] = await pool.query(
       `SELECT
          p.*,
          dp.id          AS item_id,
@@ -312,7 +312,7 @@ export const getAllPedidos = async (req, res) => {
     // SDI-258 (H-13): LEFT JOIN a usuarios Y clientes — incluye pedidos B2B (mayoristas)
     // SDI-262 (H-06): un solo JOIN elimina el bucle N+1
     // SDI-265      : paginación con subquery para aplicar LIMIT antes del JOIN con items
-    const [rows] = await pool.execute(
+    const [rows] = await pool.query(
       `SELECT
          p.*,
          COALESCE(u.nombre, c.contacto_nombre) AS cliente_nombre,
