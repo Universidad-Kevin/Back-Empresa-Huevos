@@ -31,6 +31,7 @@ import favoritosRoutes from "./routes/favoritos.js";
 import valoracionesRoutes from "./routes/valoraciones.js";
 import notificacionesRoutes from "./routes/notificaciones.js";
 import auditoriaRoutes from "./routes/auditoria.js";
+import configuracionRoutes from "./routes/configuracion.js";
 import { auditMiddleware } from "./middleware/auditoria.js";
 import { authenticateToken } from "./middleware/auth.js";
 
@@ -115,6 +116,7 @@ app.use("/favoritos", favoritosRoutes);
 app.use("/valoraciones", valoracionesRoutes);
 app.use("/notificaciones", notificacionesRoutes);
 app.use("/auditoria", auditoriaRoutes);
+app.use("/configuracion", configuracionRoutes);
 
 // Endpoint de health check
 app.get("/health", (req, res) => {

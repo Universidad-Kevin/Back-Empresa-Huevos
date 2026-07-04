@@ -13,10 +13,12 @@ router.post("/culqi/cargo",       authenticateToken, procesarPagoCulqi);
 // Cliente
 router.post("/",                  authenticateToken, registrarPago);
 router.get("/pedido/:pedido_id",  authenticateToken, getPagoPorPedido);
-router.get("/:id/voucher",        authenticateToken, getVoucher);
 
 // Empleado o admin: ver todos
 router.get("/",                   authenticateToken, requireAdminOrEmpleado, getAllPagos);
+
+// Solo admin: ver el voucher de un pago
+router.get("/:id/voucher",        authenticateToken, requireAdmin, getVoucher);
 
 // Solo admin: verificar / rechazar (decisión financiera)
 router.patch("/:id/verificar",    authenticateToken, requireAdmin, verificarPago);

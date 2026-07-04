@@ -172,10 +172,13 @@ export const createPedido = async (req, res) => {
     const pedidoCompleto = { ...pedido[0], items: detalle };
 
     // Emails y notificaciones no bloqueantes
-    enviarConfirmacionPedido(pedido[0].cliente_nombre, pedido[0].cliente_email, pedidoCompleto);
-    enviarNotificacionAdmin(pedidoCompleto);
+    enviarConfirmacionPedido(pedido[0].cliente_nombre, pedido[0].cliente_email, pedidoCompleto)
+      .catch((err) => console.error("Error enviando confirmación de pedido:", err));
+    enviarNotificacionAdmin(pedidoCompleto)
+      .catch((err) => console.error("Error enviando notificación admin:", err));
     const { titulo, mensaje } = MENSAJES.pedido_nuevo(pedidoId, total);
-    crearNotificacion(usuarioId, "pedido_nuevo", titulo, mensaje, { pedido_id: pedidoId });
+    crearNotificacion(usuarioId, "pedido_nuevo", titulo, mensaje, { pedido_id: pedidoId })
+      .catch((err) => console.error("Error creando notificación:", err));
 
     res.status(201).json({
       success: true,
@@ -554,7 +557,7 @@ export const updateEstadoPedido = async (req, res) => {
       );
       enviarCambioEstado(pedidoData[0].cliente_nombre, pedidoData[0].cliente_email, {
         id, estado, total: pedidoData[0].total, items,
-      });
+      }).catch((err) => console.error("Error enviando cambio de estado:", err));
     }
 
     if (pedidoUsuarioId) {

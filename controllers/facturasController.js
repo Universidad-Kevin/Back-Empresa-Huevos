@@ -31,8 +31,8 @@ export const crearFactura = async (req, res) => {
     if (tipo === 'factura' && tipo_documento !== 'ruc') {
       return res.status(400).json({ error: "Las facturas requieren RUC" });
     }
-    if (tipo === 'factura' && documento.length !== 11) {
-      return res.status(400).json({ error: "El RUC debe tener 11 dígitos" });
+    if (tipo === 'factura' && !/^\d{11}$/.test(documento)) {
+      return res.status(400).json({ error: "El RUC debe tener exactamente 11 dígitos numéricos" });
     }
 
     // Verificar pedido
@@ -106,7 +106,6 @@ export const crearFactura = async (req, res) => {
 // GET /facturas — listar todas (admin)
 export const getAllFacturas = async (req, res) => {
   try {
-    if (req.user.rol !== "admin") return res.status(403).json({ error: "Solo admin" });
     const [facturas] = await pool.execute(
       `SELECT f.id, f.pedido_id, f.tipo, f.numero, f.nombre_razon_social,
               f.tipo_documento, f.documento, f.subtotal, f.igv, f.total, f.email_envio,

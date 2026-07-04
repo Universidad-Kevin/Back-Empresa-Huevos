@@ -44,6 +44,11 @@ export const createInteresado = async (req, res) => {
         .json({ error: "Nombre, email, asunto y mensaje son requeridos" });
     }
 
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+      return res.status(400).json({ error: "Formato de email inválido" });
+    }
+
     const [result] = await pool.execute(
       `INSERT INTO interesados
        (nombre, email, telefono, asunto, mensaje, creado_en)
@@ -57,7 +62,9 @@ export const createInteresado = async (req, res) => {
     );
 
     // Enviar email al admin (no bloqueante)
-    enviarMensajeContacto({ nombre, email, telefono, asunto, mensaje });
+    enviarMensajeContacto({ nombre, email, telefono, asunto, mensaje }).catch((err) =>
+      console.error("Error enviando email de contacto:", err)
+    );
 
     res.status(201).json({
       success: true,

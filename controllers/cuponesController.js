@@ -55,7 +55,6 @@ export const validarCupon = async (req, res) => {
 };
 
 export const getAllCupones = async (req, res) => {
-  if (req.user.rol !== "admin") return res.status(403).json({ error: "Solo admin" });
   try {
     const [rows] = await pool.execute("SELECT * FROM cupones ORDER BY creado_en DESC");
     res.json({ success: true, data: rows });
@@ -65,12 +64,12 @@ export const getAllCupones = async (req, res) => {
 };
 
 export const crearCupon = async (req, res) => {
-  if (req.user.rol !== "admin") return res.status(403).json({ error: "Solo admin" });
   const { codigo, descripcion, tipo, valor, minimo_compra, maximo_descuento, usos_disponibles, fecha_inicio, fecha_fin } = req.body;
 
   if (!codigo || !tipo || valor === undefined) return res.status(400).json({ error: "Campos requeridos: codigo, tipo, valor" });
   if (!["porcentaje", "monto_fijo"].includes(tipo)) return res.status(400).json({ error: "Tipo inválido" });
   if (tipo === "porcentaje" && (valor < 0 || valor > 100)) return res.status(400).json({ error: "Porcentaje debe ser entre 0 y 100" });
+  if (tipo === "monto_fijo" && parseFloat(valor) <= 0) return res.status(400).json({ error: "El monto del cupón debe ser mayor a 0" });
 
   try {
     const [result] = await pool.execute(
@@ -96,7 +95,6 @@ export const crearCupon = async (req, res) => {
 };
 
 export const actualizarCupon = async (req, res) => {
-  if (req.user.rol !== "admin") return res.status(403).json({ error: "Solo admin" });
   const { id } = req.params;
   const { descripcion, tipo, valor, minimo_compra, maximo_descuento, usos_disponibles, fecha_inicio, fecha_fin, activo } = req.body;
 
@@ -104,6 +102,7 @@ export const actualizarCupon = async (req, res) => {
   if (!["porcentaje", "monto_fijo"].includes(tipo)) return res.status(400).json({ error: "Tipo inválido" });
   if (tipo === "porcentaje" && (parseFloat(valor) < 0 || parseFloat(valor) > 100))
     return res.status(400).json({ error: "Porcentaje debe ser entre 0 y 100" });
+  if (tipo === "monto_fijo" && parseFloat(valor) <= 0) return res.status(400).json({ error: "El monto del cupón debe ser mayor a 0" });
 
   try {
     const [[cupon]] = await pool.execute("SELECT id FROM cupones WHERE id = ?", [id]);
@@ -132,7 +131,6 @@ export const actualizarCupon = async (req, res) => {
 };
 
 export const eliminarCupon = async (req, res) => {
-  if (req.user.rol !== "admin") return res.status(403).json({ error: "Solo admin" });
   const { id } = req.params;
   try {
     const [[cupon]] = await pool.execute("SELECT id FROM cupones WHERE id = ?", [id]);

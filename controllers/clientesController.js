@@ -58,6 +58,11 @@ export const createCliente = async (req, res) => {
       });
     }
 
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+      return res.status(400).json({ error: "Formato de email inválido" });
+    }
+
     if (!password || password.length < 6) {
       return res.status(400).json({ error: "La contraseña debe tener al menos 6 caracteres" });
     }
@@ -259,7 +264,8 @@ export const asignarCredenciales = async (req, res) => {
     await pool.query("UPDATE clientes SET password = ? WHERE id = ?", [hashed, id]);
 
     if (enviarEmail !== false) {
-      enviarBienvenidaMayorista(rows[0].contacto_nombre, rows[0].nombre_empresa, rows[0].email, password);
+      enviarBienvenidaMayorista(rows[0].contacto_nombre, rows[0].nombre_empresa, rows[0].email, password)
+        .catch((err) => console.error("Error enviando email de bienvenida:", err));
     }
 
     res.json({ success: true, message: "Credenciales asignadas correctamente" });

@@ -51,8 +51,6 @@ export const registrarPago = async (req, res) => {
 // GET /pagos — Admin lista todos los pagos (sin voucher para aligerar la respuesta)
 export const getAllPagos = async (req, res) => {
   try {
-    if (req.user.rol !== "admin") return res.status(403).json({ error: "Solo admin" });
-
     const [pagos] = await pool.execute(`
       SELECT pg.id, pg.pedido_id, pg.metodo, pg.estado, pg.monto,
              pg.notas_admin, pg.creado_en, pg.actualizado_en,
@@ -93,7 +91,6 @@ export const getPagoPorPedido = async (req, res) => {
 // GET /pagos/:id/voucher — Admin obtiene imagen del voucher
 export const getVoucher = async (req, res) => {
   try {
-    if (req.user.rol !== "admin") return res.status(403).json({ error: "Solo admin" });
     const { id } = req.params;
     const [[pago]] = await pool.execute("SELECT voucher FROM pagos WHERE id = ?", [id]);
     if (!pago) return res.status(404).json({ error: "Pago no encontrado" });
@@ -108,7 +105,6 @@ export const getVoucher = async (req, res) => {
 export const verificarPago = async (req, res) => {
   const conn = await pool.getConnection();
   try {
-    if (req.user.rol !== "admin") return res.status(403).json({ error: "Solo admin" });
     const { id } = req.params;
     const { notas_admin } = req.body;
 
@@ -186,7 +182,6 @@ export const verificarPago = async (req, res) => {
 // PATCH /pagos/:id/rechazar — Admin rechaza pago
 export const rechazarPago = async (req, res) => {
   try {
-    if (req.user.rol !== "admin") return res.status(403).json({ error: "Solo admin" });
     const { id } = req.params;
     const { notas_admin } = req.body;
 

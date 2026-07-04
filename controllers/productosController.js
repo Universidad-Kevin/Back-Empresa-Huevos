@@ -151,6 +151,18 @@ export const createProducto = async (req, res) => {
       return res.status(400).json({ error: "Nombre, precio y categoría son requeridos" });
     }
 
+    if (parseFloat(precio) <= 0) {
+      return res.status(400).json({ error: "El precio debe ser mayor a 0" });
+    }
+
+    if (nombre.length > 200) {
+      return res.status(400).json({ error: "El nombre no puede superar los 200 caracteres" });
+    }
+
+    if (descripcion && descripcion.length > 2000) {
+      return res.status(400).json({ error: "La descripción no puede superar los 2000 caracteres" });
+    }
+
     const [result] = await pool.query(
       `INSERT INTO productos
        (codigo, nombre, descripcion, precio, categoria, categoria_id, marca_id, imagen, stock, unidad, estado, caracteristicas, creado_en)
@@ -227,6 +239,18 @@ export const updateProducto = async (req, res) => {
       });
     }
 
+    if (parseFloat(precio) <= 0) {
+      return res.status(400).json({ error: "El precio debe ser mayor a 0" });
+    }
+
+    if (nombre.length > 200) {
+      return res.status(400).json({ error: "El nombre no puede superar los 200 caracteres" });
+    }
+
+    if (descripcion && descripcion.length > 2000) {
+      return res.status(400).json({ error: "La descripción no puede superar los 2000 caracteres" });
+    }
+
     const [existing] = await pool.query("SELECT * FROM productos WHERE id = ?", [id]);
     if (existing.length === 0) {
       return res.status(404).json({ error: "Producto no encontrado" });
@@ -287,10 +311,7 @@ export const updateProducto = async (req, res) => {
     });
   } catch (error) {
     console.error("Error actualizando producto:", error);
-    res.status(500).json({
-      error: "Error del servidor al actualizar producto",
-      details: error.message,
-    });
+    res.status(500).json({ error: "Error del servidor al actualizar producto" });
   }
 };
 
