@@ -8,11 +8,16 @@ services:
     environment:
       - NODE_ENV=${NODE_ENV:-development}
       - DB_HOST=db
+      - DB_PORT=3306
       - DB_USER=huevos_user
       - DB_PASSWORD=huevos_password
       - DB_NAME=huevos_organicos
       - JWT_SECRET=${JWT_SECRET}
       - FRONTEND_URL=${FRONTEND_URL}
+      - EMAIL_HOST=${EMAIL_HOST}
+      - EMAIL_PORT=${EMAIL_PORT}
+      - EMAIL_USER=${EMAIL_USER}
+      - EMAIL_PASS=${EMAIL_PASS}
     volumes:
       - .:/app
       - /app/node_modules

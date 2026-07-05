@@ -1,7 +1,8 @@
 // server.js
+import "dotenv/config";
 import express from "express";
 import cors from "cors";
-import dotenv from "dotenv";
+import helmet from "helmet";
 import { fileURLToPath } from "url";
 import { dirname, join } from "path";
 import { existsSync } from "fs";
@@ -33,25 +34,6 @@ import auditoriaRoutes from "./routes/auditoria.js";
 import { auditMiddleware } from "./middleware/auditoria.js";
 import { authenticateToken } from "./middleware/auth.js";
 
-if (process.env.NODE_ENV !== "production") { dotenv.config(); }
-
-// Debug — diagnóstico de variables de entorno en Railway
-console.log("=== RAILWAY ENV DIAGNOSTIC ===");
-console.log("JWT_SECRET:", process.env.JWT_SECRET ? `SET (${process.env.JWT_SECRET.length} chars)` : "MISSING");
-console.log("NODE_ENV:", process.env.NODE_ENV || "MISSING");
-console.log("PORT:", process.env.PORT || "MISSING (will use 3000)");
-// DB explicit overrides
-console.log("DB_HOST:", process.env.DB_HOST || "MISSING");
-console.log("DB_USER:", process.env.DB_USER ? "SET" : "MISSING");
-console.log("DB_NAME:", process.env.DB_NAME || "MISSING");
-// Railway reference variables (may not resolve cross-service)
-console.log("MYSQLHOST:", process.env.MYSQLHOST || "MISSING");
-console.log("MYSQLUSER:", process.env.MYSQLUSER ? "SET" : "MISSING");
-console.log("MYSQLDATABASE:", process.env.MYSQLDATABASE || "MISSING");
-// Railway internal networking — reliable fallback
-console.log("RAILWAY_PRIVATE_DOMAIN:", process.env.RAILWAY_PRIVATE_DOMAIN || "MISSING");
-console.log("MYSQL_ROOT_PASSWORD:", process.env.MYSQL_ROOT_PASSWORD ? `SET (${process.env.MYSQL_ROOT_PASSWORD.length} chars)` : "MISSING");
-console.log("==============================");
 
 
 // Guardia de seguridad al arranque
@@ -65,6 +47,12 @@ if (process.env.NODE_ENV === "production" && !process.env.FRONTEND_URL) {
 
 const app = express();
 const PORT = process.env.PORT || 3000;
+
+// Cabeceras de seguridad HTTP
+app.use(helmet({
+  crossOriginResourcePolicy: { policy: "cross-origin" }, // permite imágenes de URLs externas
+  contentSecurityPolicy: false, // El frontend es SPA servido por separado; CSP se configura allí
+}));
 
 // ⚡ Middleware CORS - Desarrollo local
 if (process.env.NODE_ENV !== "production") {
@@ -86,9 +74,9 @@ if (process.env.NODE_ENV !== "production") {
   );
 }
 
-// Middleware para parsear JSON y URL-encoded
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+// Parseo de body — 10 MB para permitir imágenes base64 en actualizaciones de productos
+app.use(express.json({ limit: "10mb" }));
+app.use(express.urlencoded({ extended: true, limit: "10mb" }));
 
 // Middleware de logging simple
 app.use((req, res, next) => {
@@ -102,14 +90,7 @@ app.use(auditMiddleware);
 app.get("/", (req, res) => {
   res.json({
     success: true,
-    message: "API de Huevos Orgánicos - Backend funcionando 🥚",
-    version: "1.0.0",
-    endpoints: {
-      auth: "/auth",
-      productos: "/productos",
-      clientes: "/clientes",
-      health: "/health",
-    },
+    message: "API de Huevos Orgánicos - Backend funcionando",
   });
 });
 
@@ -145,23 +126,29 @@ app.get("/health", (req, res) => {
   });
 });
 
-// Info de la API
+// Info de la API — sin versión expuesta públicamente
 app.get("/info", (req, res) => {
   res.json({
     success: true,
     data: {
       nombre: "API Huevos Orgánicos",
-      version: "1.0.0",
       descripcion: "Backend para el sistema de gestión de huevos orgánicos",
-      autor: "Kevin Tenorio",
     },
   });
 });
+
+// SDI-282: cache de 5 minutos para estadísticas — evita 6 queries por cada recarga del dashboard
+const _statsCache = { data: null, ts: 0, TTL: 5 * 60 * 1000 };
 
 // Estadísticas admin — protegidas
 app.get("/admin/estadisticas", authenticateToken, async (req, res) => {
   if (req.user.rol !== "admin") return res.status(403).json({ error: "Solo admin" });
   try {
+    const now = Date.now();
+    if (_statsCache.data && now - _statsCache.ts < _statsCache.TTL) {
+      return res.json({ success: true, data: _statsCache.data, cached: true });
+    }
+
     const pool = await import("./config/database.js").then(m => m.default);
 
     const [[ventasMes]] = await pool.execute(`
@@ -212,20 +199,22 @@ app.get("/admin/estadisticas", authenticateToken, async (req, res) => {
     const curr = parseFloat(ventasMes.total);
     const crecimiento = prev > 0 ? (((curr - prev) / prev) * 100).toFixed(1) : null;
 
-    res.json({
-      success: true,
-      data: {
-        ventas_mes: curr,
-        pedidos_mes: ventasMes.pedidos,
-        ventas_mes_anterior: prev,
-        crecimiento,
-        clientes_nuevos: clientesNuevos.total,
-        top_productos: topProductos,
-        tendencias,
-        ventas_diarias: ventasDiarias,
-        pedidos_por_estado: pedidosPorEstado,
-      },
-    });
+    const payload = {
+      ventas_mes: curr,
+      pedidos_mes: ventasMes.pedidos,
+      ventas_mes_anterior: prev,
+      crecimiento,
+      clientes_nuevos: clientesNuevos.total,
+      top_productos: topProductos,
+      tendencias,
+      ventas_diarias: ventasDiarias,
+      pedidos_por_estado: pedidosPorEstado,
+    };
+
+    _statsCache.data = payload;
+    _statsCache.ts   = now;
+
+    res.json({ success: true, data: payload, cached: false });
   } catch (e) {
     console.error("Error estadísticas admin:", e);
     res.status(500).json({ error: "Error del servidor" });

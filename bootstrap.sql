@@ -59,6 +59,7 @@ CREATE TABLE IF NOT EXISTS clientes (
   tipo_negocio    VARCHAR(100) NOT NULL,
   contacto_nombre VARCHAR(255) NOT NULL,
   email           VARCHAR(255) NOT NULL UNIQUE,
+  password        VARCHAR(255) NULL,
   telefono        VARCHAR(50),
   direccion       TEXT,
   ruc             VARCHAR(50),
@@ -95,12 +96,25 @@ CREATE TABLE IF NOT EXISTS cupones (
   creado_en        TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
+CREATE TABLE IF NOT EXISTS cupon_usos (
+  id         INT AUTO_INCREMENT PRIMARY KEY,
+  cupon_id   INT NOT NULL,
+  usuario_id INT NOT NULL,
+  pedido_id  INT NOT NULL,
+  usado_en   TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE KEY uq_cupon_usuario (cupon_id, usuario_id),
+  CONSTRAINT fk_cu_cupon   FOREIGN KEY (cupon_id)   REFERENCES cupones(id)  ON DELETE CASCADE,
+  CONSTRAINT fk_cu_usuario FOREIGN KEY (usuario_id) REFERENCES usuarios(id) ON DELETE CASCADE,
+  CONSTRAINT fk_cu_pedido  FOREIGN KEY (pedido_id)  REFERENCES pedidos(id)  ON DELETE CASCADE
+);
+
 -- -------------------------------------------------------------
 -- PRODUCTOS (depende de categorias y marcas)
 -- -------------------------------------------------------------
 
 CREATE TABLE IF NOT EXISTS productos (
   id                     INT AUTO_INCREMENT PRIMARY KEY,
+  codigo                 VARCHAR(50) NULL UNIQUE,
   nombre                 VARCHAR(255) NOT NULL,
   descripcion            TEXT,
   precio                 DECIMAL(10,2) NOT NULL,
@@ -109,6 +123,7 @@ CREATE TABLE IF NOT EXISTS productos (
   marca_id               INT,
   imagen                 MEDIUMTEXT,
   stock                  INT DEFAULT 0,
+  unidad                 VARCHAR(50) NOT NULL DEFAULT 'unidad',
   stock_minimo           INT NOT NULL DEFAULT 5,
   ultima_alerta_stock_en TIMESTAMP NULL,
   estado                 ENUM('activo','inactivo') DEFAULT 'activo',
@@ -126,11 +141,15 @@ CREATE TABLE IF NOT EXISTS productos (
 CREATE TABLE IF NOT EXISTS pedidos (
   id                   INT AUTO_INCREMENT PRIMARY KEY,
   usuario_id           INT NOT NULL,
+  cliente_id           INT NULL,
   estado               ENUM('pendiente','confirmado','preparando','enviado','entregado','cancelado','devuelto') NOT NULL DEFAULT 'pendiente',
   metodo_pago          ENUM('efectivo','yape','plin','transferencia','tarjeta') NOT NULL DEFAULT 'efectivo',
   estado_pago          ENUM('pendiente','pagado') NOT NULL DEFAULT 'pendiente',
   total                DECIMAL(10,2) NOT NULL,
   nota                 TEXT,
+  dir_calle            VARCHAR(200) NULL,
+  dir_distrito         VARCHAR(100) NULL,
+  dir_referencia       VARCHAR(200) NULL,
   codigo_verificacion  VARCHAR(20) UNIQUE,
   motivo_cancelacion   TEXT,
   cupon_codigo         VARCHAR(50) NULL,

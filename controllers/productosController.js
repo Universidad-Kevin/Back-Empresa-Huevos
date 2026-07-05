@@ -1,13 +1,56 @@
 import pool from "../config/database.js";
+import { uploadBuffer } from "../config/cloudinary.js";
 
-// Obtener todos los productos activos
+// Obtener productos activos con paginación, búsqueda y filtro por categoría (SDI-264, SDI-278)
 export const getProductos = async (req, res) => {
   try {
-    const [rows] = await pool.query(
-      "SELECT * FROM productos WHERE estado = 'activo' ORDER BY creado_en DESC"
+    const page  = Math.max(1, parseInt(req.query.page)  || 1);
+    const limit = Math.min(100, parseInt(req.query.limit) || 20);
+    const offset = (page - 1) * limit;
+    const q          = req.query.q?.trim()          || null;
+    const categoriaId = req.query.categoria_id       || null;
+    const marcaId     = req.query.marca_id           || null;
+
+    const conditions = ["p.estado = 'activo'"];
+    const params = [];
+
+    if (categoriaId) { conditions.push("p.categoria_id = ?"); params.push(categoriaId); }
+    if (marcaId)     { conditions.push("p.marca_id = ?");     params.push(marcaId); }
+    if (q) {
+      conditions.push("(p.nombre LIKE ? OR p.descripcion LIKE ?)");
+      params.push(`%${q}%`, `%${q}%`);
+    }
+
+    const where = conditions.length ? "WHERE " + conditions.join(" AND ") : "";
+
+    const [[{ total }]] = await pool.query(
+      `SELECT COUNT(*) AS total FROM productos p ${where}`,
+      params
     );
 
-    res.json({ success: true, data: rows });
+    const [rows] = await pool.query(
+      `SELECT p.*, cat.nombre AS categoria_nombre, m.nombre AS marca_nombre
+       FROM productos p
+       LEFT JOIN categorias cat ON cat.id = p.categoria_id
+       LEFT JOIN marcas m ON m.id = p.marca_id
+       ${where}
+       ORDER BY p.creado_en DESC
+       LIMIT ? OFFSET ?`,
+      [...params, limit, offset]
+    );
+
+    res.json({
+      success: true,
+      data: rows,
+      pagination: {
+        total,
+        page,
+        limit,
+        pages: Math.ceil(total / limit),
+        hasNext: page * limit < total,
+        hasPrev: page > 1,
+      },
+    });
   } catch (error) {
     console.error("Error obteniendo productos:", error);
     res.status(500).json({ error: "Error del servidor" });
@@ -18,7 +61,6 @@ export const getProductos = async (req, res) => {
 export const reactivarProducto = async (req, res) => {
   try {
     const { id } = req.params;
-    console.log("Reactivando producto ID:", id);
 
     const [result] = await pool.query(
       "UPDATE productos SET estado = 'activo', actualizado_en = CURRENT_TIMESTAMP WHERE id = ?",
@@ -97,7 +139,6 @@ export const createProducto = async (req, res) => {
       nombre, descripcion, precio, categoria, imagen, stock,
       estado, caracteristicas, codigo, unidad, categoria_id, marca_id,
     } = req.body;
-    console.log("Datos recibidos para crear producto:", req.body);
 
     let categoriaText = categoria || null;
     let catId = categoria_id || null;
@@ -155,7 +196,6 @@ export const updateProducto = async (req, res) => {
       estado, caracteristicas, codigo, unidad, categoria_id, marca_id,
     } = req.body;
 
-    console.log("Actualizando producto ID:", id, "con datos:", req.body);
 
     // Si solo se cambia el estado
     if (Object.keys(req.body).length === 1 && req.body.estado) {
@@ -307,7 +347,7 @@ export const patchEstadoProducto = async (req, res) => {
 };
 
 
-// POST /productos/:id/imagen — sube imagen y la guarda como base64 en la BD
+// POST /productos/:id/imagen — sube imagen a Cloudinary y guarda la URL en la BD
 export const uploadImagenProducto = async (req, res) => {
   const { id } = req.params;
   if (!req.file) return res.status(400).json({ error: "No se recibió ningún archivo" });
@@ -316,16 +356,19 @@ export const uploadImagenProducto = async (req, res) => {
     const [rows] = await pool.execute("SELECT id FROM productos WHERE id = ?", [id]);
     if (rows.length === 0) return res.status(404).json({ error: "Producto no encontrado" });
 
-    const dataUrl = `data:${req.file.mimetype};base64,${req.file.buffer.toString("base64")}`;
+    const result = await uploadBuffer(req.file.buffer, {
+      public_id: `producto-${id}`,
+      overwrite: true,
+    });
 
     await pool.execute(
       "UPDATE productos SET imagen = ?, actualizado_en = CURRENT_TIMESTAMP WHERE id = ?",
-      [dataUrl, id]
+      [result.secure_url, id]
     );
 
-    res.json({ success: true, imagen: dataUrl });
+    res.json({ success: true, imagen: result.secure_url });
   } catch (e) {
     console.error("uploadImagenProducto:", e);
-    res.status(500).json({ error: "Error del servidor" });
+    res.status(500).json({ error: "Error al subir imagen" });
   }
 };

@@ -87,10 +87,18 @@ export const updateMiPerfil = async (req, res) => {
 
     const usuario = rows[0];
 
+    // Validaciones de longitud (H-14: solo en frontend antes, ahora también en backend)
+    if (nombre && nombre.trim().length > 50) {
+      return res.status(400).json({ error: "El nombre no puede superar 50 caracteres" });
+    }
+
     // Si quiere cambiar contraseña, validar la actual
     if (password_nuevo) {
       if (!password_actual) {
         return res.status(400).json({ error: "Debes ingresar tu contraseña actual para cambiarla" });
+      }
+      if (password_nuevo.length < 8) {
+        return res.status(400).json({ error: "La nueva contraseña debe tener al menos 8 caracteres" });
       }
       const valida = await bcrypt.compare(password_actual, usuario.password);
       if (!valida) {
@@ -109,19 +117,28 @@ export const updateMiPerfil = async (req, res) => {
       }
     }
 
-    const nuevoNombre = nombre || usuario.nombre;
+    const nuevoNombre = nombre?.trim() || usuario.nombre;
     const nuevoEmail = email || usuario.email;
     let nuevoPassword = usuario.password;
+    let passwordCambio = false;
 
     if (password_nuevo) {
       const salt = await bcrypt.genSalt(10);
       nuevoPassword = await bcrypt.hash(password_nuevo, salt);
+      passwordCambio = true;
     }
 
-    await pool.execute(
-      "UPDATE usuarios SET nombre = ?, email = ?, password = ? WHERE id = ?",
-      [nuevoNombre, nuevoEmail, nuevoPassword, usuarioId]
-    );
+    if (passwordCambio) {
+      await pool.execute(
+        "UPDATE usuarios SET nombre = ?, email = ?, password = ?, password_changed_at = NOW() WHERE id = ?",
+        [nuevoNombre, nuevoEmail, nuevoPassword, usuarioId]
+      );
+    } else {
+      await pool.execute(
+        "UPDATE usuarios SET nombre = ?, email = ? WHERE id = ?",
+        [nuevoNombre, nuevoEmail, usuarioId]
+      );
+    }
 
     res.json({
       success: true,

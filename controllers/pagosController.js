@@ -1,6 +1,7 @@
 import pool from "../config/database.js";
 import { crearNotificacion, MENSAJES } from "../services/notificacionesService.js";
 import { crearCargo } from "../services/culqiService.js";
+import { registrarMovimiento } from "./inventarioController.js";
 
 
 // POST /pagos — Cliente registra/actualiza comprobante
@@ -103,29 +104,68 @@ export const getVoucher = async (req, res) => {
   }
 };
 
-// PATCH /pagos/:id/verificar — Admin verifica pago → confirma pedido automáticamente
+// PATCH /pagos/:id/verificar — Admin verifica pago → confirma pedido + registra venta en kardex
 export const verificarPago = async (req, res) => {
+  const conn = await pool.getConnection();
   try {
     if (req.user.rol !== "admin") return res.status(403).json({ error: "Solo admin" });
     const { id } = req.params;
     const { notas_admin } = req.body;
 
-    const [[pago]] = await pool.execute("SELECT * FROM pagos WHERE id = ?", [id]);
+    const [[pago]] = await conn.execute("SELECT * FROM pagos WHERE id = ?", [id]);
     if (!pago) return res.status(404).json({ error: "Pago no encontrado" });
     if (pago.estado !== "pendiente") {
       return res.status(400).json({ error: `El pago ya está en estado "${pago.estado}"` });
     }
+    if (!pago.voucher) {
+      return res.status(400).json({ error: "No se puede verificar: el cliente aún no ha adjuntado el comprobante de pago" });
+    }
 
-    await pool.execute(
+    await conn.beginTransaction();
+
+    await conn.execute(
       "UPDATE pagos SET estado = 'verificado', notas_admin = ?, actualizado_en = NOW() WHERE id = ?",
       [notas_admin || null, id]
     );
-    await pool.execute("UPDATE pedidos SET estado_pago = 'pagado' WHERE id = ?", [pago.pedido_id]);
+    await conn.execute("UPDATE pedidos SET estado_pago = 'pagado' WHERE id = ?", [pago.pedido_id]);
 
-    const [[pedidoActual]] = await pool.execute("SELECT estado FROM pedidos WHERE id = ?", [pago.pedido_id]);
+    const [[pedidoActual]] = await conn.execute("SELECT estado FROM pedidos WHERE id = ?", [pago.pedido_id]);
     if (pedidoActual?.estado === "pendiente") {
-      await pool.execute("UPDATE pedidos SET estado = 'confirmado' WHERE id = ?", [pago.pedido_id]);
+      await conn.execute("UPDATE pedidos SET estado = 'confirmado' WHERE id = ?", [pago.pedido_id]);
     }
+
+    // Registrar venta confirmada en el kardex por cada producto del pedido
+    const [items] = await conn.execute(
+      `SELECT dp.producto_id, dp.cantidad, dp.nombre_producto
+       FROM detalle_pedidos dp WHERE dp.pedido_id = ?`,
+      [pago.pedido_id]
+    );
+    for (const item of items) {
+      // Obtener los valores de stock del movimiento original (cuando se creó el pedido)
+      const [[mov]] = await conn.execute(
+        `SELECT stock_anterior, stock_nuevo FROM movimientos_inventario
+         WHERE pedido_id = ? AND producto_id = ? AND tipo = 'pedido' LIMIT 1`,
+        [pago.pedido_id, item.producto_id]
+      );
+      const stockAnterior = mov?.stock_anterior ?? null;
+      const stockNuevo = mov?.stock_nuevo ?? null;
+      try {
+        await registrarMovimiento(conn, {
+          producto_id: item.producto_id,
+          tipo: "venta",
+          cantidad: -item.cantidad,
+          stock_anterior: stockAnterior,
+          stock_nuevo: stockNuevo,
+          motivo: `Venta confirmada — Pedido #${pago.pedido_id} (comprobante verificado)`,
+          pedido_id: pago.pedido_id,
+          usuario_id: req.user.id,
+        });
+      } catch (e) {
+        console.warn("kardex venta:", e.message);
+      }
+    }
+
+    await conn.commit();
 
     const [[ped]] = await pool.execute("SELECT usuario_id FROM pedidos WHERE id = ?", [pago.pedido_id]);
     if (ped?.usuario_id) {
@@ -135,8 +175,11 @@ export const verificarPago = async (req, res) => {
 
     res.json({ success: true, message: "Pago verificado. El pedido fue confirmado automáticamente." });
   } catch (error) {
+    await conn.rollback();
     console.error("Error verificando pago:", error);
     res.status(500).json({ error: "Error del servidor" });
+  } finally {
+    conn.release();
   }
 };
 

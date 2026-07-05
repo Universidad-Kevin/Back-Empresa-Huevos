@@ -10,11 +10,15 @@ import { uploadImagen, handleUploadError } from "../middleware/upload.js";
 
 const router = express.Router();
 
+// Rutas con segmentos fijos deben ir ANTES de /:id para que Express no las capture como IDs
+
+// Staff — catálogo completo incluyendo inactivos
+router.get("/all",       authenticateToken, requireAdminOrEmpleado, getAllProductos);
+router.get("/inactivos", authenticateToken, requireAdminOrEmpleado, getProductosInactivos);
+
 // Públicas
-router.get("/activos",  getProductos);
-router.get("/all",      getAllProductos);
-router.get("/inactivos", getProductosInactivos);
-router.get("/:id",      getProductoById);
+router.get("/activos",   getProductos);
+router.get("/:id",       getProductoById);
 
 // Empleado o admin: gestión de productos e inventario
 router.post("/",                           authenticateToken, requireAdminOrEmpleado, createProducto);
