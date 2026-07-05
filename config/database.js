@@ -9,11 +9,11 @@ const connectionUrl = process.env.MYSQL_URL || process.env.DATABASE_URL;
 
 // Config individual — usado como fallback y para el bootstrap (multipleStatements)
 const baseConfig = {
-  host: process.env.DB_HOST || process.env.MYSQLHOST,
-  port: parseInt(process.env.DB_PORT || process.env.MYSQLPORT || "3306"),
-  user: process.env.DB_USER || process.env.MYSQLUSER,
-  password: process.env.DB_PASSWORD || process.env.MYSQLPASSWORD,
-  database: process.env.DB_NAME || process.env.MYSQLDATABASE,
+  host:     resolvedHost,
+  port:     resolvedPort,
+  user:     resolvedUser,
+  password: resolvedPassword,
+  database: resolvedDatabase,
   ssl: process.env.DB_SSL === "true" ? { rejectUnauthorized: false } : undefined,
 };
 
