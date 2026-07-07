@@ -7,6 +7,36 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 
 const connectionUrl = process.env.MYSQL_URL || process.env.DATABASE_URL;
 
+// ---------------------------------------------------------------------------
+// Host resolution order:
+//   1. DB_HOST          – explicit override (local dev / custom Railway var)
+//   2. MYSQLHOST        – Railway reference variable (works when resolved)
+//   3. RAILWAY_PRIVATE_DOMAIN – Railway-injected private domain for THIS service
+//                         (only useful when the app and MySQL share a service,
+//                          which is uncommon; kept as a safety net)
+//   4. mysql.railway.internal – Railway internal DNS for a service named "mysql"
+//                         This is the reliable fallback when reference variables
+//                         are not injected into the container.
+// ---------------------------------------------------------------------------
+const resolvedHost =
+  process.env.DB_HOST ||
+  process.env.MYSQLHOST ||
+  process.env.RAILWAY_PRIVATE_DOMAIN ||
+  "mysql.railway.internal";
+
+// ---------------------------------------------------------------------------
+// Credential resolution order:
+//   1. Explicit DB_* vars (local dev / custom Railway vars)
+//   2. MYSQL* vars from Railway reference variables (when they resolve)
+//   3. Railway MySQL template defaults: root / railway / 3306
+//      MYSQL_ROOT_PASSWORD is set by the Railway MySQL template and IS
+//      injected into the same service, unlike cross-service reference vars.
+// ---------------------------------------------------------------------------
+const resolvedUser     = process.env.DB_USER     || process.env.MYSQLUSER     || "root";
+const resolvedPassword = process.env.DB_PASSWORD || process.env.MYSQLPASSWORD || process.env.MYSQL_ROOT_PASSWORD || "";
+const resolvedDatabase = process.env.DB_NAME     || process.env.MYSQLDATABASE || "railway";
+const resolvedPort     = parseInt(process.env.DB_PORT || process.env.MYSQLPORT || "3306", 10);
+
 // Config individual — usado como fallback y para el bootstrap (multipleStatements)
 const baseConfig = {
   host:     resolvedHost,
