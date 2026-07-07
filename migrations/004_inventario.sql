@@ -1,10 +1,24 @@
 -- Migration 004: Sistema de Inventario (SDI-54 / SDI-75)
--- Ejecutar: docker compose exec -T db mysql -uhuevos_user -phuevos_password huevos_organicos < migrations/004_inventario.sql
+-- Usa PREPARE/EXECUTE para compatibilidad con MySQL 8 (IF NOT EXISTS no es estándar en ALTER).
 
 -- 1. Columnas de inventario en productos
-ALTER TABLE productos
-  ADD COLUMN IF NOT EXISTS stock_minimo INT NOT NULL DEFAULT 5,
-  ADD COLUMN IF NOT EXISTS ultima_alerta_stock_en TIMESTAMP NULL;
+SET @has_stock_minimo = (
+  SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS
+  WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'productos' AND COLUMN_NAME = 'stock_minimo'
+);
+SET @sql = IF(@has_stock_minimo = 0,
+  'ALTER TABLE productos ADD COLUMN stock_minimo INT NOT NULL DEFAULT 5',
+  'SELECT 1');
+PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
+SET @has_ultima_alerta = (
+  SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS
+  WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'productos' AND COLUMN_NAME = 'ultima_alerta_stock_en'
+);
+SET @sql = IF(@has_ultima_alerta = 0,
+  'ALTER TABLE productos ADD COLUMN ultima_alerta_stock_en TIMESTAMP NULL',
+  'SELECT 1');
+PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
 
 -- 2. Tabla de movimientos (Kardex)
 CREATE TABLE IF NOT EXISTS movimientos_inventario (

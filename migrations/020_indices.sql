@@ -3,7 +3,6 @@
 
 DROP PROCEDURE IF EXISTS add_index_if_not_exists;
 
-DELIMITER $$
 CREATE PROCEDURE add_index_if_not_exists(
   tbl VARCHAR(64), idx VARCHAR(64), cols VARCHAR(255)
 )
@@ -19,8 +18,7 @@ BEGIN
     EXECUTE stmt;
     DEALLOCATE PREPARE stmt;
   END IF;
-END$$
-DELIMITER ;
+END;
 
 -- pedidos
 CALL add_index_if_not_exists('pedidos', 'idx_pedidos_usuario_id',    'usuario_id');

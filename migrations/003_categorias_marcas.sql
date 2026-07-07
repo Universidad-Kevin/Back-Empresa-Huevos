@@ -1,5 +1,5 @@
 -- Migration 003: Categorías y Marcas de Productos (SDI-53 / SDI-71)
--- Ejecutar: docker compose exec -T db mysql -uhuevos_user -phuevos_password huevos_organicos < migrations/003_categorias_marcas.sql
+-- Usa PREPARE/EXECUTE para compatibilidad con MySQL 8 (IF NOT EXISTS no es estándar en ALTER).
 
 -- 1. Crear tabla categorias
 CREATE TABLE IF NOT EXISTS categorias (
@@ -18,12 +18,42 @@ CREATE TABLE IF NOT EXISTS marcas (
   creado_en TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
--- 3. Agregar FKs a productos
-ALTER TABLE productos
-  ADD COLUMN categoria_id INT,
-  ADD COLUMN marca_id INT,
-  ADD CONSTRAINT fk_prod_categoria FOREIGN KEY (categoria_id) REFERENCES categorias(id) ON DELETE SET NULL,
-  ADD CONSTRAINT fk_prod_marca     FOREIGN KEY (marca_id)     REFERENCES marcas(id)     ON DELETE SET NULL;
+-- 3. Agregar columnas FK a productos
+SET @has_categoria_id = (
+  SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS
+  WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'productos' AND COLUMN_NAME = 'categoria_id'
+);
+SET @sql = IF(@has_categoria_id = 0,
+  'ALTER TABLE productos ADD COLUMN categoria_id INT',
+  'SELECT 1');
+PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
+SET @has_marca_id = (
+  SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS
+  WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'productos' AND COLUMN_NAME = 'marca_id'
+);
+SET @sql = IF(@has_marca_id = 0,
+  'ALTER TABLE productos ADD COLUMN marca_id INT',
+  'SELECT 1');
+PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
+SET @has_fk_categoria = (
+  SELECT COUNT(*) FROM INFORMATION_SCHEMA.TABLE_CONSTRAINTS
+  WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'productos' AND CONSTRAINT_NAME = 'fk_prod_categoria'
+);
+SET @sql = IF(@has_fk_categoria = 0,
+  'ALTER TABLE productos ADD CONSTRAINT fk_prod_categoria FOREIGN KEY (categoria_id) REFERENCES categorias(id) ON DELETE SET NULL',
+  'SELECT 1');
+PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
+SET @has_fk_marca = (
+  SELECT COUNT(*) FROM INFORMATION_SCHEMA.TABLE_CONSTRAINTS
+  WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'productos' AND CONSTRAINT_NAME = 'fk_prod_marca'
+);
+SET @sql = IF(@has_fk_marca = 0,
+  'ALTER TABLE productos ADD CONSTRAINT fk_prod_marca FOREIGN KEY (marca_id) REFERENCES marcas(id) ON DELETE SET NULL',
+  'SELECT 1');
+PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
 
 -- 4. Seed de categorías existentes (matching valores actuales en productos)
 INSERT IGNORE INTO categorias (nombre) VALUES

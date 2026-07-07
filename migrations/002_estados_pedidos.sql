@@ -1,5 +1,5 @@
 -- Migration 002: Estados avanzados de pedidos (SDI-52)
--- Ejecutar: docker compose exec -T db mysql -uhuevos_user -phuevos_password huevos_organicos < migrations/002_estados_pedidos.sql
+-- Usa PREPARE/EXECUTE para compatibilidad con MySQL 8 (IF NOT EXISTS no es estándar en ALTER).
 
 -- 1. Ampliar el ENUM de estados
 ALTER TABLE pedidos
@@ -9,6 +9,21 @@ ALTER TABLE pedidos
 UPDATE pedidos SET estado = 'preparando' WHERE estado = 'procesando';
 UPDATE pedidos SET estado = 'entregado'  WHERE estado = 'completado';
 
--- 3. Columnas auxiliares (puede que ya existan en tu BD — ignorar errores de duplicado)
-ALTER TABLE pedidos ADD COLUMN IF NOT EXISTS codigo_verificacion VARCHAR(20) UNIQUE;
-ALTER TABLE pedidos ADD COLUMN IF NOT EXISTS motivo_cancelacion TEXT;
+-- 3. Columnas auxiliares
+SET @has_codigo = (
+  SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS
+  WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'pedidos' AND COLUMN_NAME = 'codigo_verificacion'
+);
+SET @sql = IF(@has_codigo = 0,
+  'ALTER TABLE pedidos ADD COLUMN codigo_verificacion VARCHAR(20) UNIQUE',
+  'SELECT 1');
+PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
+SET @has_motivo = (
+  SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS
+  WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'pedidos' AND COLUMN_NAME = 'motivo_cancelacion'
+);
+SET @sql = IF(@has_motivo = 0,
+  'ALTER TABLE pedidos ADD COLUMN motivo_cancelacion TEXT',
+  'SELECT 1');
+PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
